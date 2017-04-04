@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 from caflib.Tools import geomlib
 from caflib.Timing import timing
+from caflib.Configure import before_templates, feature
+from caflib.Tools.geomlib import Crystal
 import vdwsets.vdwsets as vdw
 import json
+import shutil
+import os
+from pathlib import Path
 
 
 paths = [
@@ -10,10 +15,13 @@ paths = [
     '<>/*/*/{b3lyp*,lda,m06*,pbe*,scan*}',
     '*/*/*/<>/calc',
     '*/*/*/<b3lyp*,lda,m06*,pbe*,scan*>',
-    '<>/*',
     '<>/*/*/mbd',
     '<>/*/*/dftd3',
+    '<>/*/*/vv10/*/*/calc',
+    '<>/*/*/vv10/*/*',
 ]
+
+pseudo_root = Path(os.environ['ESPRESSO_PSEUDO'])
 
 
 def taskgen(ctx, geom, dsname):
@@ -81,6 +89,36 @@ def taskgen(ctx, geom, dsname):
                 texts={'geom.xyz': geom.dumps('xyz')}
             )
         tsk + ctx.link('dftd3') + master
+        if dsname not in ['S22', 'X23', 'S66x8', 'S12L']:
+            return master
+        if hasattr(geom, 'lattice'):
+            kwargs = {'k_grid': geom.get_kgrid(0.8), 'geom': geom}
+        else:
+            kwargs = {
+                'k_grid': (1, 1, 1),
+                'geom': Crystal.from_molecule(geom, padding=4.)
+            }
+        if 'charge' in geom.metadata:
+            kwargs['other'] = f'\ntot_charge = {geom.metadata["charge"]}'
+        vv10 = ctx()
+        for b_vv10 in [4.5, 6.3, 8., 10., 13., 16., 19., 22.]:
+            tsk = ctx()
+            for xc_name, xc in [('vdw', 'rvv10'), ('base', 'sla+pw+rw86+pbc')]:
+                ctx(
+                    features='qe',
+                    templates=('qespresso.in', 'input.in'),
+                    basis=30.,
+                    pseudo='_ONCV_PBE-1.0.upf',
+                    qe_delink='qe.master',
+                    b_vv=b_vv10,
+                    xc=xc,
+                    **kwargs
+                ) + ctx.link('calc', ('run.out', 'qe.out')) + ctx(
+                    command='python3 process_qe.py <qe.out >results.json',
+                    files='process_qe.py'
+                ) + ctx.link(xc_name) + tsk
+            tsk + ctx.link(str(b_vv10)) + vv10
+        vv10 + ctx.link('vv10') + master
     return master
 
 
@@ -89,3 +127,60 @@ def configure(ctx):
     geomlib.settings['eq_precision'] = 3
     for name, ds in vdw.get_all_datasets().items():
         ds.get_task(ctx, taskgen) * ctx.target(name)
+
+
+class Cache:
+    qe = {}
+    pseudo = {}
+
+
+def get_pp(elem, pseudo):
+    if (elem, pseudo) in Cache.pseudo:
+        return Cache.pseudo[elem, pseudo]
+    candidates = [p.name for p in pseudo_root.glob(elem + pseudo)]
+    if len(candidates) > 1:
+        candidates = [c for c in candidates if 'ak' not in c]
+    if len(candidates) != 1:
+        raise RuntimeError((elem, pseudo, candidates))
+    Cache.pseudo[elem, pseudo] = candidates[0]
+    print(f'{elem}{pseudo} is {candidates[0]}')
+    return candidates[0]
+
+
+def get_qe(qe):
+    if qe in Cache.qe:
+        return Cache.qe[qe]
+    exe = Path(shutil.which(qe))
+    if exe.is_symlink():
+        exe = os.readlink(exe)
+    else:
+        exe = qe
+    Cache.qe[qe] = exe
+    print(f'QE {qe} is {exe}')
+    return exe
+
+
+@before_templates
+@feature('qe')
+def qespresso(task):
+    geom = task.consume('geom')
+    pseudo = task.consume('pseudo')
+    attribs = {
+        'nat': len(geom),
+        'ntyp': len(set(a.symbol for a in geom)),
+        'species': '\n'.join(sorted(set(
+            f'{a.symbol} {a.mass} {get_pp(a.symbol, pseudo)}' for a in geom
+        ))),
+        'coords': '\n'.join(' '.join(map(str, [a.symbol, *a.xyz])) for a in geom),
+        'lattice': '\n'.join(' '.join(map(str, vec)) for vec in geom.lattice),
+        'k_grid': ' '.join(map(str, task.consume('k_grid'))),
+    }
+    attribs.update({
+        k: v for k, v
+        in ((attr, task.consume(attr)) for attr in 'basis xc b_vv C_vv'.split())
+        if v
+    })
+    task.attrs.update(attribs)
+    qe = get_qe(task.consume('qe_delink'))
+    task.attrs['command'] = f'QESPRESSO={qe} run_qe'
+    task.inputs['geom.vasp'] = geom.dumps('vasp')
