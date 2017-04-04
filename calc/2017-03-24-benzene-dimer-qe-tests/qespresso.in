@@ -1,0 +1,30 @@
+&CONTROL
+verbosity = 'high'
+disk_io = 'none'
+/
+
+&SYSTEM
+ibrav = 0
+nat = {{ nat }}
+ntyp = {{ ntyp }}
+ecutwfc = {{ basis=50. }}
+input_dft = '{{ xc }}'
+vv10_b_value = {{ b_vv=6.3 }}
+vv10_c_value = {{ C_vv=0.0093 }}
+/
+
+&ELECTRONS
+/
+
+ATOMIC_SPECIES
+{{ species }}
+
+ATOMIC_POSITIONS angstrom
+{{ coords }}
+
+K_POINTS automatic
+{{ k_grid }} 0 0 0
+
+CELL_PARAMETERS angstrom
+{{ lattice }}
+
