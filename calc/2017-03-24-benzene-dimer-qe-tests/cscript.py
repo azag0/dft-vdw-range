@@ -13,8 +13,18 @@ pseudo_root = Path(os.environ['ESPRESSO_PSEUDO'])
 def configure(ctx):
     crystal = geomlib.readfile('crystal.aims')
     molecule = geomlib.readfile('molecule.aims')
+    other = []
+    for geomfile in ['bz-dimer-long.aims', 'supra.aims']:
+        cluster = geomlib.readfile(geomfile)
+        frags = cluster.get_fragments()
+        system = Path(geomfile).stem
+        other.extend([
+            (system, 'complex', cluster),
+            (system, 'frag-1a', frags[0]),
+            (system, 'frag-2a', frags[1]),
+        ])
     for padding, (xc_name, xc), basis, (pp_name, pp) in product(
-            [2., 3., 4., 5.],
+            [2., 3., 4., 5., 6., 7.],
             [('vv10', 'rvv10'), ('base', 'sla+pw+rw86+pbc')],
             [20., 30., 50., 70.],
             [
@@ -25,19 +35,27 @@ def configure(ctx):
                 ('US-LDA', '.pw91*van*.UPF'),
             ],
     ):
-        geom = geomlib.readfile('geom.xyz')
+        if padding > 5 and not (basis == 30. and pp_name == 'NC'):
+            continue
+        geom = geomlib.readfile('bz-dimer.xyz')
         geom_pbc = geomlib.Crystal.from_molecule(geom, padding)
         frags = geom_pbc.get_fragments()
         molecule_pbc = geomlib.Crystal.from_molecule(molecule, padding)
-        for name, geom in [
-                ('complex', geom_pbc),
-                ('frag-1', geomlib.Crystal(geom_pbc.lattice, frags[0].atoms)),
-                ('frag-2', geomlib.Crystal(geom_pbc.lattice, frags[1].atoms)),
-                ('frag-1a', geomlib.Crystal.from_molecule(frags[0], padding)),
-                ('frag-2a', geomlib.Crystal.from_molecule(frags[1], padding)),
-                ('crystal', crystal),
-                ('molecule', molecule_pbc),
-        ]:
+        all_geoms = [
+            ('benzene', 'complex', geom_pbc),
+            ('benzene', 'frag-1', geomlib.Crystal(geom_pbc.lattice, frags[0].atoms)),
+            ('benzene', 'frag-2', geomlib.Crystal(geom_pbc.lattice, frags[1].atoms)),
+            ('benzene', 'frag-1a', geomlib.Crystal.from_molecule(frags[0], padding)),
+            ('benzene', 'frag-2a', geomlib.Crystal.from_molecule(frags[1], padding)),
+            ('benzene', 'crystal', crystal),
+            ('benzene', 'molecule', molecule_pbc),
+        ]
+        if basis == 30. and pp_name == 'NC':
+            all_geoms.extend(
+                (system, name, geomlib.Crystal.from_molecule(geom, padding))
+                for system, name, geom in other
+            )
+        for system, name, geom in all_geoms:
             ctx(
                 features=qespresso,
                 templates=('qespresso.in', 'input.in'),
@@ -47,7 +65,7 @@ def configure(ctx):
                 qe_delink='qe.master',
                 geom=geom,
                 xc=xc,
-            ) * ctx.target(f'main/{padding}/{basis}/{pp_name}/{xc_name}/{name}')
+            ) * ctx.target(f'{system}/{padding}/{basis}/{pp_name}/{xc_name}/{name}')
 
 
 class Cache:
