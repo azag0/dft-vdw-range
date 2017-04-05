@@ -20,6 +20,7 @@ paths = [
     '<>/*/*/vv10/*/*/calc',
     '<>/*/*/vv10/*/*',
 ]
+b_vv10_values = [4.5, 6.3, 8., 10., 13., 16., 19., 22.]
 
 pseudo_root = Path(os.environ['ESPRESSO_PSEUDO'])
 
@@ -101,7 +102,7 @@ def taskgen(ctx, geom, dsname):
         if 'charge' in geom.metadata:
             kwargs['other'] = f'\ntot_charge = {geom.metadata["charge"]}'
         vv10 = ctx()
-        for b_vv10 in [4.5, 6.3, 8., 10., 13., 16., 19., 22.]:
+        for b_vv10 in b_vv10_values:
             tsk = ctx()
             for xc_name, xc in [('vdw', 'rvv10'), ('base', 'sla+pw+rw86+pbc')]:
                 ctx(
