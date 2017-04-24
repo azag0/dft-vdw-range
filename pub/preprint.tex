@@ -1,0 +1,58 @@
+\documentclass[twocolumn]{article}
+\usepackage[margin=0.6in,columnsep=0.15in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{stix}
+\usepackage{microtype}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage[colorlinks,citecolor=Gray,urlcolor=Gray,linkcolor=Cyan]{hyperref}
+
+\usepackage{abstract}
+\setlength{\absleftindent}{1in}
+\setlength{\absrightindent}{\absleftindent}
+
+\usepackage{authblk}
+\renewcommand\Affilfont{\itshape\small} % chktex 6
+
+\usepackage[normal]{caption}
+\DeclareCaptionLabelSeparator{pipe}{ $|$ }
+\captionsetup{labelsep=pipe}
+\renewcommand{\captionfont}{\small}
+\renewcommand{\captionlabelfont}{\bfseries}
+
+\usepackage[comma,sort&compress]{natbib}
+\bibliographystyle{naturemag}
+
+\input{preamble.tex}
+
+\author[1]{Jan Hermann}
+\author[1]{Matthias Scheffler}
+\author[2,*]{Alexandre Tkatchenko}
+\affil[1]{Fritz-Haber-Institut der Max-Planck-Gesellschaft, Faradayweg 4--6, 14195, Berlin, Germany}
+\affil[2]{Physics and Materials Science Research Unit, University of Luxembourg, L-1511 Luxembourg}
+\affil[*]{\normalfont{Email: alexandre.tkatchenko@uni.lu}}
+
+\date{}
+
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+
+\twocolumn[
+  \maketitle
+  \begin{onecolabstract}
+  \input{abstract.tex}
+  \end{onecolabstract}
+]
+
+\input{text.tex}
+
+\subsubsection{Acknowledgements}
+
+\subsubsection{References}
+
+\begingroup
+\renewcommand{\section}[2]{}%
+\bibliography{refs}
+\endgroup
+
+\end{document}
