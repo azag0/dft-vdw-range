@@ -5,7 +5,6 @@ from caflib.Configure import before_templates, feature
 from caflib.Tools.geomlib import Crystal
 import vdwsets.vdwsets as vdw
 import json
-import shutil
 import os
 from pathlib import Path
 
@@ -104,13 +103,13 @@ def taskgen(ctx, geom, dsname):
         vv10 = ctx()
         for b_vv10 in b_vv10_values:
             tsk = ctx()
-            for xc_name, xc in [('vdw', 'rvv10'), ('base', 'sla+pw+rw86+pbc')]:
+            for xc_name, xc in [('vdw', 'rvv10'), ('base', 'sla+pw+rw86+pbc'), ('vdw2', 'rvv10')]:
                 ctx(
                     features='qe',
                     templates=('qespresso.in', 'input.in'),
                     basis=30.,
                     pseudo='_ONCV_PBE-1.0.upf',
-                    qe_delink='qe.master',
+                    qe='qe.master' if xc_name == 'vdw2' else 'qe.8d90260',
                     b_vv=b_vv10,
                     xc=xc,
                     **kwargs
@@ -148,19 +147,6 @@ def get_pp(elem, pseudo):
     return candidates[0]
 
 
-def get_qe(qe):
-    if qe in Cache.qe:
-        return Cache.qe[qe]
-    exe = Path(shutil.which(qe))
-    if exe.is_symlink():
-        exe = os.readlink(exe)
-    else:
-        exe = qe
-    Cache.qe[qe] = exe
-    print(f'QE {qe} is {exe}')
-    return exe
-
-
 @before_templates
 @feature('qe')
 def qespresso(task):
@@ -182,6 +168,6 @@ def qespresso(task):
         if v
     })
     task.attrs.update(attribs)
-    qe = get_qe(task.consume('qe_delink'))
+    qe = task.consume('qe')
     task.attrs['command'] = f'QESPRESSO={qe} run_qe'
     task.inputs['geom.vasp'] = geom.dumps('vasp')

@@ -16,7 +16,11 @@ def chunks(lst, n):
 
 results = {}
 f = sys.stdin
-line = next(l for l in f if l[0] == '!')
+for line in f:
+    if line[0] == '!':
+        break
+    if line.lstrip().startswith('Non-local correlation energy'):
+        results['nlc'] = float(line.split()[-1])
 results['energy'] = float(line.split()[4])
 line = next(l for l in f if 'PWSCF        :' in l)
 results['time'] = get_seconds(re.search(r'CPU +(\S.*) WALL', line).group(1))
