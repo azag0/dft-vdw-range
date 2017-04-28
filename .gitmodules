@@ -1,3 +1,6 @@
 [submodule "calc/2017-01-23-all-vdw-sets-3/vdwsets"]
 	path = calc/2017-01-23-all-vdw-sets-3/vdwsets
 	url = https://github.com/azag0/vdwsets.git
+[submodule "calc/2017-04-24-scan-modifications/vdwsets"]
+	path = calc/2017-04-24-scan-modifications/vdwsets
+	url = https://github.com/azag0/vdwsets.git
