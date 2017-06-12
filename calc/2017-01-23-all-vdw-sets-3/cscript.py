@@ -32,6 +32,8 @@ def taskgen(ctx, geom, dsname):
                 ('pbe', 'pbe', 'tight'),
                 ('pbe0', 'pbe0', 'tight'),
                 ('scan', 'dfauto scan', 'tight'),
+                ('scan(a)', 'dfauto scan\nxc_param scanx_c2x 0.3', 'tight'),
+                ('scan(b)', 'dfauto scan\nxc_param scanx_dx 2.0', 'tight'),
                 ('b3lyp', 'b3lyp', 'tight'),
                 ('scan0', 'dfauto scan0', 'tight'),
                 ('m06', 'm06', 'tight'),
@@ -109,7 +111,7 @@ def taskgen(ctx, geom, dsname):
                     templates=('qespresso.in', 'input.in'),
                     basis=30.,
                     pseudo='_ONCV_PBE-1.0.upf',
-                    qe='qe.master' if xc_name == 'vdw2' else 'qe.8d90260',
+                    qe='qe.master' if xc_name == 'vdw2' or dsname == 'S12L' else 'qe.8d90260',
                     b_vv=b_vv10,
                     xc=xc,
                     **kwargs
