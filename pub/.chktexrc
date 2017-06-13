@@ -1,0 +1,11 @@
+DashExcpt = {
+    Thomas--Fermi
+    Vydrov--Van
+    dipole--dipole
+    dipole--quadrupole
+    Becke--Johnson
+    Hartree--Fock
+    Kohn--Sham
+}
+CmdLine = {
+}
