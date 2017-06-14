@@ -62,32 +62,32 @@ We use three vdW models to characterize the correlation-range behaviour of the X
 Because the correlation range differs between XC functionals, and in any case is explicitly unknown, all these vdW models have parameters that control their own correlation range, and enables them to be adjusted for different XC functionals.
 Here, we review only those aspects of these vdW models directly related to these correlation-range parameters, while we refer the reader to the original references for full descriptions.
 In MBD, the electronic Coulomb potential, $v(r)$, (precisely, its dipole approximation, $\mathbf T(\mathbf r-\mathbf r')=\boldsymbol\nabla_\mathbf r\boldsymbol\nabla_\mathbf r'v(\lvert\mathbf r-\mathbf r'\rvert)$) is explicitly damped at short distances with a logistic function,
-$$
+\[
   \mathbf T^\text{MBD}(\mathbf R_i-\mathbf R_j)=\frac{\mathbf T(\mathbf R_i-\mathbf R_j)}{1+\exp\left(-6\left(\frac{\lvert\mathbf R_i-\mathbf R_j\rvert}{\beta\big(R_i^\text{vdW}+R_j^\text{vdW}\big )}-1\right)\!\!\right)}
-$$
+\]
 where $R_i^\text{vdW}$ is a vdW radius of the $i$-th atom, and $\beta$ is the single range-separation parameter.
 The damped dipole potential is equal to a half of the bare potential at the distance that is a $\beta$-fraction of the sum of vdW radii of two atoms.
 In D3, being a second-order approximation to the full many-body correlation problem, the radially-averaged square of the dipole--dipole and dipole--quadrupole potentials are used, $\langle\mathbf T_{pp}^2\rangle=6R^{-6}$, $\langle\mathbf T{pQ}^2\rangle=8R^{-8}$, which are then damped explicitly at short distances.
 Several different damping functions have been suggested, but we consider only the Becke--Johnson (BJ) damping, being most popular and also mostly different from the MBD damping function,
-$$
+\[
   f_n^\text{BJ}(R_{ij})R_{ij}^{-n}=\frac{R_{ij}^{-n}}{1+\left(\frac{\alpha_1(R^0_i+R^0_j)+\alpha_2}{R_{ij}}\right)^n}
-$$
+\]
 where $R^0_i$ is a vdW-like radius of the $i$-th atom, and $\alpha_1$, $\alpha_2$ are two range-separation parameters.
 The D3 energy is then obtained as
-$$
+\[
 E^\text{D3}_\text{vdW}=-\frac12\sum_{ij}C_{6,ij}f_6(R_{ij})R_{ij}^{-6}+s_8C_{8,ij}f_8(R_{ij})R_{ij}^{-8}
-$$
+\]
 where $C_{n,ij}$ is an $n$-th order dispersion coefficient, and $s_8$ is the third parameter, which by virtue of controlling the short-range dipole--quadrupole terms also contributes to the range-separation mechanism in D3.
 
 In VV10, the vdW energy is obtained as a second-order interaction between chunks of electron density with dynamic polarizabilities given by a semi-local functional of density,
-$$
+\[
 \alpha^\text{VV10}[n](\mathrm iu)=\frac n{4\pi n/3+C\lvert\boldsymbol\nabla n/n\rvert^4+u^2}
-$$
+\]
 where $\mathrm iu$ is the imaginary frequency and $C$ is a parameter that controls the asymptotic behaviour of the vdW energy (not the range separation).
 The short-range damping mechanism in VV10 works by screening the polarizability at point $\mathbf r$ when considering its interaction with the density at point $\mathbf r'$
-$$
+\[
 \tilde\alpha^\text{VV10}[n](\mathrm iu)=\frac n{4\pi n/3+C\lvert\boldsymbol\nabla n/n\rvert^4+u^2}
-$$
+\]
 
 \subsection{Van der Waals benchmark datasets}
 
@@ -99,15 +99,15 @@ The full result of evaluating a method on a benchmark set is the distribution of
 Since the interaction energies in vdW benchmark sets typically span more than an order of magnitude, relative errors are usually considered.
 Full distributions are difficult to compare between different methods, so various statistical measures are often calculated.
 A popular measure is the mean absolute relative error (MARE),
-$$
+\[
 \text{MARE}=\frac1N\sum_i\frac{\lvert E_i-E_i^\text{ref}\rvert}{-E_i^\text{ref}}
-$$
+\]
 This measure serves well as a single-number indicator of performance, but does not provide much insight into the underlying error distribution.
 We calculate two different statistical measures instead, the mean error (ME) and the standard deviation (SD),
-$$
+\[
 \text{ME}=\frac1N\sum_i E_i-E_i^\text{ref},\quad
 \text{SD}=\sqrt{\frac1N\sum_i(E_i-\text{ME})^2}
-$$
+\]
 This enables us to study both the systematic error (ME), which says whether majority of energies from the set are either overestimated or underestimated by a method, and the ``statistical'' error (SD), from which the systematic error is removed.
 
 \section{Results}
@@ -134,10 +134,8 @@ The distributions of binding energy errors across a dataset and their dependence
 
 \begin{figure*}
 \makebox[\textwidth][c]{\includegraphics{../media/s66-dists}}
-\caption{\textbf{Label.}
-Text.
-\label{fig:s66-dists}
-}
+\caption{\textbf{Label.} Text.
+}\label{fig:s66-dists}
 \end{figure*}
 
 \begin{figure*}
@@ -151,28 +149,23 @@ Text.
 \node [below right] at (14.7,0) {\includegraphics{../media/d3-param-fitting.pdf}};
 \end{tikzpicture}
 }
-\caption{\textbf{Label.}
-Text.
-\label{fig:param-fitting}
-}
+\caption{\textbf{Label.} Text.
+}\label{fig:param-fitting}
 \end{figure*}
 
 \begin{figure}
 \centering
 \includegraphics{../media/size-dependence}
-\caption{\textbf{Label.}
-Text.
-\label{fig:size-dependence}
-}
+\caption{\textbf{Label.} Text.
+}\label{fig:size-dependence}
 \end{figure}
 
 \begin{figure}
+
 \centering
 \includegraphics{../media/flakes}
-\caption{\textbf{Label.}
-Text.
-\label{fig:flakes}
-}
+\caption{\textbf{Label.} Text.
+}\label{fig:flakes}
 \end{figure}
 
 \section{Conclusions}
