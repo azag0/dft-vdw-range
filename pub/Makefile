@@ -1,14 +1,9 @@
-BLDDIR = build
+BLDDIR = _build
 
-all: preprint suppl
+all: preprint
 
-preprint: refs.bib | blddir
-	latexmk -pdf -halt-on-error -jobname=$(BLDDIR)/$@ $@
-	rsync -a $(BLDDIR)/$@.pdf .
-
-suppl: | blddir
-	latexmk -pdf -halt-on-error -jobname=$(BLDDIR)/$@ $@
-	rsync -a $(BLDDIR)/$@.pdf .
+preprint: refs.bib
+	env max_print_line=1000000 latexmk -pdf -outdir=$(BLDDIR) -interaction=nonstopmode $@
 
 bib: refs.bib
 
@@ -16,8 +11,3 @@ refs.bib: FORCE
 	-curl -f -o $@ "http://localhost:23119/better-bibtex/collection?/0/References/mbd-scan.bibtex&exportNotes=false&useJournalAbbreviation=true"
 
 FORCE:
-
-blddir:
-	mkdir -p $(BLDDIR)
-	@ln -fns . $(BLDDIR)/$(BLDDIR)
-
