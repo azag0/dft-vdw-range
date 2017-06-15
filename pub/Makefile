@@ -1,9 +1,13 @@
 BLDDIR = _build
 
-all: preprint
+default: revtex
 
-preprint: refs.bib
-	env max_print_line=1000000 latexmk -pdf -outdir=$(BLDDIR) -interaction=nonstopmode $@
+revtex: $(BLDDIR)/preprint-revtex.pdf
+
+preprint: $(BLDDIR)/preprint.pdf
+
+$(BLDDIR)/%.pdf: %.tex FORCE
+	env max_print_line=1000000 latexmk -pdf -outdir=$(BLDDIR) -interaction=nonstopmode $<
 
 bib: refs.bib
 

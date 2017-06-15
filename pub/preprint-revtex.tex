@@ -1,0 +1,36 @@
+\documentclass[aip,jcp,reprint]{revtex4-1} % chktex 8
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+
+\input{preamble.tex}
+
+%\usetikzlibrary{external}
+%\tikzexternalize[force remake=true,optimize=false]
+
+\begin{document}
+
+\input{front-matter.tex}
+
+\author{Jan Hermann}
+\author{Matthias Scheffler}
+\affiliation{Fritz-Haber-Institut der Max-Planck-Gesellschaft, Faradayweg 4--6, 14195 Berlin, Germany}
+\author{Alexandre Tkatchenko}
+\email{Email: alexandre.tkatchenko@uni.lu}
+\affiliation{Physics and Materials Science Research Unit, University of Luxembourg, 162A Avenue de la Faïencerie, L-1511 Luxembourg}
+
+\begin{abstract}
+  \input{abstract.tex}
+\end{abstract}
+
+\setcounter{secnumdepth}{0}
+
+\maketitle
+
+\input{text.tex}
+
+\begin{acknowledgments}
+\end{acknowledgments}
+
+\bibliography{refs}
+
+\end{document}

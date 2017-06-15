@@ -5,11 +5,12 @@
 \usepackage{microtype}
 \usepackage[usenames,dvipsnames]{color}
 \usepackage[colorlinks,citecolor=Gray,urlcolor=Gray,linkcolor=Cyan]{hyperref}
-\usepackage[small]{titlesec}
+\usepackage[tiny]{titlesec}
 
-\usepackage{abstract}
-\setlength{\absleftindent}{1in}
+\usepackage[runin]{abstract}
+\setlength{\absleftindent}{0.7in}
 \setlength{\absrightindent}{\absleftindent}
+\setlength{\abstitleskip}{-1em}
 
 \usepackage{authblk}
 \renewcommand\Affilfont{\itshape\small} % chktex 6
@@ -30,6 +31,7 @@
 \newcommand\doi[1]{\href{http://dx.doi.org/#1}{\nolinkurl{#1}}}
 
 \input{preamble.tex}
+\input{front-matter.tex}
 
 %\usetikzlibrary{external}
 %\tikzexternalize[force remake=true,optimize=false]
@@ -49,17 +51,16 @@
 
 \twocolumn[
   \maketitle
+  \vspace{-3em}
   \begin{onecolabstract}
   \input{abstract.tex}
   \end{onecolabstract}
-  \vspace{2em}
+  \vspace{1em}
 ]
 
 \input{text.tex}
 
-\subsubsection{Acknowledgements}
-
-\subsubsection{References}
+\section{Acknowledgements}
 
 \begingroup
 \renewcommand{\section}[2]{}
