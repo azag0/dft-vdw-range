@@ -2,120 +2,101 @@
 
 In a true many-body electronic wave function, the motions of electrons are dynamically correlated across the entire range of inter-electronic distances.
 A large part of this correlation is efficiently captured by various approximations to the Kohn--Sham density-functional theory (KS-DFT), which established it as a basic tool in computational chemistry and condensed-matter physics.
-But the standard density functionals are semi-local in space, resulting in electron correlation energy that decays exponentially with distance, as if the electrons were essentially uncorrelated at long range.
+But the standard density functionals are semi-local in space, resulting in electron correlation energy that decays exponentially with distance---as if the electrons were essentially uncorrelated at long range (except for the special case of slowly-varying electron density).
 This leads to severe underestimation of van der Waals (vdW) dispersion interactions, which are mostly caused by long-range electron correlation.
-As these interactions strongly contribute to properties of nearly all biological and modern synthetic materials, many models were developed that account specifically for the long-range correlation~\cite{DionPRL04,VydrovJCP10a,BeckeJCP07,TkatchenkoPRL09,GrimmeJCP10,AmbrosettiJCP14} to augment the semi-local (or hybrid) density-functional calculations.
-This range separation of electron correlation into two separate models can be in principle done formally~\cite{HermannCR17}, but insufficient knowledge about the (differing) ranges of semi-local functionals prevents this in practice, leading to various semi-empirical approaches.
+As these interactions strongly contribute to properties of nearly all biological and modern synthetic materials, many models were developed that account specifically for the long-range correlation~\cite{DionPRL04,VydrovJCP10a,JohnsonJCP06,TkatchenkoPRL09,GrimmeJCP10,AmbrosettiJCP14} to augment the semi-local (or hybrid) density-functional calculations.
+This range separation of electron correlation into a short-range and long-range model can be in principle done formally~\cite{HermannCR17}, but insufficient knowledge about the ranges of different semi-local functionals prevents this in practice, leading to various semi-empirical approaches.
 
 The SCAN functional is a recent first-principles semi-local functional~\cite{SunPRL15} with great performance across a broad range of systems in chemistry and physics, in many cases reaching the accuracy of hybrid functionals at a fraction of their cost~\cite{SunNC16}.
-Being semi-local, however, it still does not describe long-range electron correlation, and hence vdW interactions.
-The many-body dispersion (MBD) method is a general model of long-range electron correlation~\cite{TkatchenkoPRL12,AmbrosettiJCP14} that can be combined with any short-range correlation method, such as semi-local DFT or the density-functional tight-binding method.
+It is still only semi-local, however, and does not describe long-range electron correlation, and hence vdW interactions.
+On the other hand, the many-body dispersion (MBD) method is a general model of long-range electron correlation~\cite{TkatchenkoPRL12,AmbrosettiJCP14} that can be combined with any short-range correlation method, such as semi-local DFT or the density-functional tight-binding method.
 The crossover regime, where a short-range description blends with the long-range MBD description, is controlled with a single range-separation parameter within the MBD model.
 When trying to adjust this parameter for the SCAN functional---essentially estimating the correlation range of SCAN for vdW interactions---we observed that the optimal value depends significantly on the choice of the studied systems and the choice of the optimized quantity.
 Since this is not the case for other density functionals such as PBE, we set out to study in general the range of electron correlation as described by different density functionals in vdW-bound systems.
 
 \section{Background}
 
-This section gives a short review of the studied density functionals, vdW models, and used benchmark datasets.
+\paragraph{Density functionals: Short-range correlation models}
 
-\subsection{Density functionals: short-range correlation models}
-
-Several aspects of the ``tail'' behaviour of semi-local density functionals in vdW systems are known, mostly from observations made on particular systems.
-The Hartree--Fock model separates electron correlation into the exchange and ``pure'' correlation parts, the second of which is exclusively responsible for vdW attraction.
+Some aspects of the ``tail'' behaviour of semi-local density functionals in vdW systems are known, mostly from observations made on particular systems.
+The Hartree--Fock (HF) model separates electron correlation into the exchange and ``pure'' correlation parts, the second of which is exclusively responsible for vdW attraction.
 This does not translate well into exchange and correlation as approximated by semi-local density functionals in DFT, where the exchange part often contributes much more than the correlation part to the vdW attraction at equilibrium distances.
 This behaviour is caused by the implicit cancellation of errors between the two parts, and is reflected by the fact that most of the literature on this topic is concerned with exchange, not correlation functionals.
 
-functionals: LDA~\cite{DiracMPCPS30,PerdewPRB92}, PBE~\cite{PerdewPRL96}, PBE0~\cite{AdamoJCP99}, B3LYP~\cite{BeckeJCP93}, SCAN, M06~\cite{ZhaoTCA08}, TPSS~\cite{TaoPRL03}.
+Nearly all exchange energy functionals of the electron density, $n$, are constructed such that they are exact for the uniform electron gas, and are therefore of the form
+\begin{equation}
+  E_\mathrm x[n]=\int\mathrm d\mathbf rn(\mathbf r)\varepsilon^\text{unif}_\text x(n(\mathbf r))F_\mathrm x[n](\mathbf r)
+  \label{eq:exchange-form}
+\end{equation}
+where the exchange energy density of a uniform electron gas, $\varepsilon^\text{unif}_\mathrm x(n)=-3k_\mathrm F(n)/4\pi$, $k_\mathrm F(n)(3\pi^2n)^{1/3}$, is multiplied with the so-called enhancement factor, $F_\mathrm x[n](\mathbf r)$, which goes to zero for a homogeneous density.
+(This is also the reason why all such functionals describe the electron correlation energy completely in the uniform gas, including the long range part.
+However, since this description is only local and effective, it does not transfer into inhomogeneous systems, which vdW-bound systems inherently are.)
 
-All exchange density functionals used in this work are exact for the uniform electron gas, and are therefore of the form
-$$
-E_\mathrm x[n]=\int\mathrm d\mathbf rn(\mathbf r)\varepsilon^\text{unif}_\text x(n(\mathbf r))F_\mathrm x[n](\mathbf r)
-$$
-where the exchange energy density of a uniform electron gas, $\varepsilon^\text{unif}_\mathrm x(n)=-3k_\mathrm F(n)/4\pi$, is multiplied with the so-called enhancement factor, $k_\mathrm F(n)=(3\pi^2n)^{1/3}$, $F_\mathrm x[n](\mathbf r)$,
+The functionals studied in this work span first four rungs of the Jacob's ladder of density functionals.
+The local density approximation (LDA, first rung) is defined by setting $F_\mathrm x[n]=1$~\cite{DiracMPCPS30}.
+In a generalized gradient approximation (GGA, second rung), the enhancement factor depends locally on the dimensionless density gradient, $s[n]=\lvert\boldsymbol\nabla n\rvert/2k_\text F(n)n$, $F_\mathrm x[n](\mathbf r)=F^\text{GGA}_\mathrm x(s[n](\mathbf r))$, and it is the particular form of $F^\text{GGA}_\mathrm x(s)$ that distinguishes different GGAs.
+Our study includes the GGA functional from Perdew, Burke, and Ernzerhof (PBE)~\cite{PerdewPRL96}.
 
-In LDA, $F^\text{LDA}_\text x(\mathbf r)=1$.
-In GGA, $F_\text x[n](\mathbf r)=F^\text{GGA}_\text x(s(\mathbf r))$, where $s[n]=\lvert\boldsymbol\nabla n\rvert/2k_\text F(n)n$ is the (dimensionless) reduced density gradient.
-In meta-GGA, higher derivatives of the electron density are used to construct $F_\text x$, such as the Laplacian, as well as the KS kinetic energy density, $\tau[n]=\sum_i^\text{occ}\lvert\boldsymbol\nabla\phi_i\rvert^2/2$, where $\phi_i$ are the KS orbitals.
-In the SCAN functional specifically, the dependence on the kinetic energy density is introduced via the local density parameter $\alpha[n](\mathbf r)$,
-$$
+The search for semi-local functionals with the appropriate correlation range has been done mostly within the space of GGAs and in the context of the vdW-DF non-local functional~\cite{DionPRL04,LeePRB10}, a long-range correlation method whose correlation range is not easily modified.
+Several special-purpose functionals designed to combine well with long-range correlation models were developed, ranging from completely new constructions~\cite{PernalPRL09,WellendorffPRB12}, to recombinations of older forms~\cite{CooperPRB10,HamadaPRB14,BerlandPRB14}, to simple reparameterizations of standard functionals~\cite{ZhangPRL98,KlimesJPCM10,KlimesPRB11}.
+(An ``ideal'' exchange functional in this regard would be different from the exact exchange, because it would still contain a part of the short-range post-HF correlation that is not covered by GGA correlation functionals.)
+All of these functionals perform well for vdW-bound systems (when combined with a vdW model), but not much is known about their accuracy for other systems, preventing them from becoming general methods.
+
+In meta-GGAs, the third rung of the Jacob's ladder, still higher derivatives of the electron density (or occupied orbitals, $\phi_i$) beyond the gradient are used to construct the enhancement factor, $F_\mathrm x$.
+This includes the Laplacian of the density and the KS kinetic energy density, $\tau[n]=\sum_i^\text{occ}\lvert\boldsymbol\nabla\phi_i\rvert^2/2$.
+Two meta-GGAs are included in this study: TPSS~\cite{TaoPRL03} and the already mentioned SCAN\@.
+In both of them (and in SCAN only so), the kinetic energy density enters via a local density parameter, $\alpha[n](\mathbf r)$, that serves as a measure of localization of electrons~\cite{BeckeJCP90},
+\begin{equation}
 \alpha=(\tau-\tau^\text W)/\tau^\text{unif}\geq0
-$$
-where $\tau^\text W[n]=\lvert\boldsymbol\nabla n\rvert^2/8n$ is the von Weizsäcker kinetic functional, exact for single-orbital electron densities, and $\tau^\text{unif}(n)=3k_\text F(n)^2n/10$ is the Thomas--Fermi kinetic functional, exact for the uniform electron gas.
-The motivation for the use of $\alpha$ is that $\alpha\approx0$ where a single orbital dominates the electron density, $\alpha\approx1$ in the slowly varying (metallic) electron densities, and $\alpha\gg0$ where two closed-shell densities overlap, which is characteristic of vdW interactions.
-So in SCAN, $F_\text x[n](\mathbf r)=F_\text x^\text{SCAN}(s(\mathbf r), \alpha(\mathbf r))$.
-This richer form enables it to satisfy a wider range of exact constraints, norms, and limits compared to GGA functionals.
+\end{equation}
+where $\tau^\text W[n]=\lvert\boldsymbol\nabla n\rvert^2/8n$ is the von Weizsäcker kinetic energy functional, exact for single-orbital electron densities, and $\tau^\text{unif}(n)=3k_\text F(n)^2n/10$ is the Thomas--Fermi kinetic energy functional, exact for the uniform electron gas.
+This parameter can distinguish different kinds of electron density~\cite{SunPRL13}: $\alpha\approx0$ where a single orbital dominates the electron density, $\alpha\approx1$ for a slowly varying (metallic) electron density, and $\alpha\gg1$ where two closed-shell electron densities overlap, which is characteristic of vdW-bound systems in equilibrium (and to lesser degree also for inter-shell regions within atoms and molecules~\cite{BeckeJCP90}).
 
-The search for semi-local functionals with the appropriate range of correlation have been done mostly in the context of the vdW-DF non-local functional~\cite{CooperPRB10,PernalPRL09,KlimesJPCM10,KlimesPRB11,HamadaPRB14,WellendorffPRB12,BerlandPRB14}, a long-range correlation method which is not easily adapted to different density functionals~\cite{DionPRL04,LeePRB10}.
-Still, a more common approach is to consider the range of a semi-local functional fixed, and tune the long-range correlation model for that range, usually by adjusting a small number of parameters (often one).
-In both approaches, the resulting DFT+vdW methods are mostly designed and assessed numerically, by evaluating them on some benchmark systems where accurate binding energies are known from high-level correlation methods or experiment.
-In this work, we resort to the same technique, but considerably expand the number of system types, functionals, and vdW methods contained within a single study, which gives us a novel insight into the behaviour of different functionals.
-\subsection{Van der Waals methods: Long-range correlation models}
+The fourth rung of functionals contains GGAs and meta-GGAs with partial admixture of exact exchange, which is a nonlocal functional of the occupied orbitals.
+As in HF, exact exchange does not contribute to the vdW attraction at any distance, but substantially improves accuracy of (meta-)GGAs for many chemical problems. % chktex 36
+Here, we study the hybrid GGAs PBE0~\cite{AdamoJCP99} and B3LYP~\cite{BeckeJCP93}, and a hybrid meta-GGA M06~\cite{ZhaoTCA08}.
+We also briefly look at SCAN0~\cite{HuiJCP16}, a PBE0-like version of SCAN with 25\% of exact exchange.
 
-vdW methods: D3~\cite{GrimmeJCP10}, VV10~\cite{VydrovJCP10a}, MBD
+We do not include the fifth-rung functionals, such as the random-phase approximation or double-hybrid functionals, because they already contain long-range electron correlation by construction, at the price of much increased computational cost.
 
-In MBD, there is a single range-separation parameter, $\beta$.
-In VV10, there is also a single range-separation parameter, $b$.
-In D3, there are three parameters controlling the range separation: $\alpha_1$, $\alpha_2$, and $s_8$.
-But as will be shown later, the subset of reasonable choices in this 3-dimensional parameter space is 2-dimensional (the parameters are strongly dependent), so one can in practice fix the value of any two parameters and study the correlation range of D3 as determined by the third parameter.
+\paragraph{Van der Waals methods: Long-range correlation models}
 
-We use three vdW models to characterize the correlation-range behaviour of the XC functionals: many-body dispersion (MBD), D3 of Grimme, and the Vydrov--Van Voorhis 2010 non-local functional (VV10).
-Because the correlation range differs between XC functionals, and in any case is explicitly unknown, all these vdW models have parameters that control their own correlation range, and enables them to be adjusted for different XC functionals.
-Here, we review only those aspects of these vdW models directly related to these correlation-range parameters, while we refer the reader to the original references for full descriptions.
-In MBD, the electronic Coulomb potential, $v(r)$, (precisely, its dipole approximation, $\mathbf T(\mathbf r-\mathbf r')=\boldsymbol\nabla_\mathbf r\boldsymbol\nabla_\mathbf r'v(\lvert\mathbf r-\mathbf r'\rvert)$) is explicitly damped at short distances with a logistic function,
-\[
-  \mathbf T^\text{MBD}(\mathbf R_i-\mathbf R_j)=\frac{\mathbf T(\mathbf R_i-\mathbf R_j)}{1+\exp\left(-6\left(\frac{\lvert\mathbf R_i-\mathbf R_j\rvert}{\beta\big(R_i^\text{vdW}+R_j^\text{vdW}\big )}-1\right)\!\!\right)}
-\]
-where $R_i^\text{vdW}$ is a vdW radius of the $i$-th atom, and $\beta$ is the single range-separation parameter.
-The damped dipole potential is equal to a half of the bare potential at the distance that is a $\beta$-fraction of the sum of vdW radii of two atoms.
-In D3, being a second-order approximation to the full many-body correlation problem, the radially-averaged square of the dipole--dipole and dipole--quadrupole potentials are used, $\langle\mathbf T_{pp}^2\rangle=6R^{-6}$, $\langle\mathbf T{pQ}^2\rangle=8R^{-8}$, which are then damped explicitly at short distances.
-Several different damping functions have been suggested, but we consider only the Becke--Johnson (BJ) damping, being most popular and also mostly different from the MBD damping function,
-\[
-  f_n^\text{BJ}(R_{ij})R_{ij}^{-n}=\frac{R_{ij}^{-n}}{1+\left(\frac{\alpha_1(R^0_i+R^0_j)+\alpha_2}{R_{ij}}\right)^n}
-\]
-where $R^0_i$ is a vdW-like radius of the $i$-th atom, and $\alpha_1$, $\alpha_2$ are two range-separation parameters.
-The D3 energy is then obtained as
-\[
-E^\text{D3}_\text{vdW}=-\frac12\sum_{ij}C_{6,ij}f_6(R_{ij})R_{ij}^{-6}+s_8C_{8,ij}f_8(R_{ij})R_{ij}^{-8}
-\]
-where $C_{n,ij}$ is an $n$-th order dispersion coefficient, and $s_8$ is the third parameter, which by virtue of controlling the short-range dipole--quadrupole terms also contributes to the range-separation mechanism in D3.
+By construction, density functionals from the first four rungs cannot describe long-range electron correlation.
+We use here three different vdW methods that correct for this deficiency by complementing short-range correlation described by the functionals.
+All three have some explicit form of range separation built into them, which enables us to use them as probes to examine the implicit correlation range of the functionals.
+Hence, we briefly review the range-separation mechanisms in these vdW methods.
 
-In VV10, the vdW energy is obtained as a second-order interaction between chunks of electron density with dynamic polarizabilities given by a semi-local functional of density,
-\[
-\alpha^\text{VV10}[n](\mathrm iu)=\frac n{4\pi n/3+C\lvert\boldsymbol\nabla n/n\rvert^4+u^2}
-\]
-where $\mathrm iu$ is the imaginary frequency and $C$ is a parameter that controls the asymptotic behaviour of the vdW energy (not the range separation).
-The short-range damping mechanism in VV10 works by screening the polarizability at point $\mathbf r$ when considering its interaction with the density at point $\mathbf r'$
-\[
-\tilde\alpha^\text{VV10}[n](\mathrm iu)=\frac n{4\pi n/3+C\lvert\boldsymbol\nabla n/n\rvert^4+u^2}
-\]
+MBD is a many-body coarse-grained model of long-range electron correlation based on density-dependent atomic polarizabilities and a dipole potential in place of the electronic Coulomb potential.
+To avoid double counting of the electron correlation at short range where the density functionals describes it (and are much better at that job any long-range model would be), the dipole potential is damped, and the onset of this damping is controlled via a single parameter, $\beta^\text{MBD}$, that relates to atomic vdW radii.
 
-\subsection{Van der Waals benchmark datasets}
+The nonlocal functional of Vydrov and Van Voorhis (VV10)~\cite{VydrovJCP10a} is a point-pairwise long-range correlation model based on a local effective polarizability functional of the electron density.
+Here, the mechanism for damping works by reducing the polarizability at two interacting points if they are too close, and the parameter controlling the range, $b^\text{VV10}$, relates to the magnitude of the local effective polarizability.
 
-systems: S66~\cite{RezacJCTC11}, X23~\cite{ReillyJCP13}, S12L~\cite{RisthausJCTC13}
+The D3 method by Grimme~\cite{GrimmeJCP10} is a pairwise (or three-body) coarse-grained vdW model based on atomic polarizabilities derived from local atomic structure and damped dipole--dipole and dipole--quadrupole potentials.
+The particular form of damping in D3 received some attention~\cite{GrimmeJCC11,SchroderJCTC15,SmithJPCL16,WitteJCTC17}, and of the two main variants (both based on atomic vdW radii), the original one is similar to that used in MBD, whereas the other, originally from Johnson and Becke (BJ)~\cite{JohnsonJCP06}, has a different limiting behaviour at short range.
+Since our goal here is to cover a broad range of vdW models, we use the BJ damping for its distinction from the damping used in MBD\@.
+The BJ-damped D3 method uses three parameters that control its short-range behaviour: $s_8^\text{D3}$ controls global mixing of the dipole--quadrupole term (which is inherently short-range), and the closely related $a_1^\text{D3}$ and $a_2^\text{D3}$ control the onset of the dipole--dipole term ($a_1^\text{D3}$ scales vdW radii, $a_2^\text{D3}$ offsets them).
 
-The S66x8 set consists of 66 dimers, each at 8 intermolecular distances around the equilibrium geometry.
+\paragraph{Van der Waals benchmark sets}
 
-The full result of evaluating a method on a benchmark set is the distribution of errors, ${E_i-E_i^0}$.
-Since the interaction energies in vdW benchmark sets typically span more than an order of magnitude, relative errors are usually considered.
-Full distributions are difficult to compare between different methods, so various statistical measures are often calculated.
-A popular measure is the mean absolute relative error (MARE),
-\[
-\text{MARE}=\frac1N\sum_i\frac{\lvert E_i-E_i^\text{ref}\rvert}{-E_i^\text{ref}}
-\]
-This measure serves well as a single-number indicator of performance, but does not provide much insight into the underlying error distribution.
-We calculate two different statistical measures instead, the mean error (ME) and the standard deviation (SD),
-\[
-\text{ME}=\frac1N\sum_i E_i-E_i^\text{ref},\quad
-\text{SD}=\sqrt{\frac1N\sum_i(E_i-\text{ME})^2}
-\]
-This enables us to study both the systematic error (ME), which says whether majority of energies from the set are either overestimated or underestimated by a method, and the ``statistical'' error (SD), from which the systematic error is removed.
+Whereas the vdW models have explicit correlation range, the range of density functionals is only implicit, and the combined DFT+vdW models are therefore constructed by optimizing the range separation in vdW models against some benchmark properties, usually binding or lattice energies.
+Several benchmark sets of vdW-bound systems have been established, of which we use predominantly three: the S66 set of 66 smaller organic dimers~\cite{RezacJCTC11}, the X23 set of 23 molecular crystals~\cite{ReillyJCP13}, and the S12L set of 12 large supramolecular complexes~\cite{RisthausJCTC13}.
+The S66 set is especially useful here, because each of the 66 dimers is calculated at 8 intermolecular distances distributed around the equilibrium distance.
+
+The raw results of evaluating a method on a benchmark set consist of the distribution of errors, $E_i-E_i^\text{ref}$.
+Since the interaction energies in vdW systems span orders of magnitude, we use relative errors, $\Delta_\mathrm rE_i=(E_i-E_i^\text{ref})/(-E_i^\text{ref})$ (assuming $E_i$ are negative).
+The comparison of error distributions between different methods is simplified by introducing various statistical measures.
+A popular measure is the mean absolute relative error (MARE), $\sum_i\lvert\Delta_\mathrm rE_i\rvert/N$, which serves well as a single-number indicator of performance, but does not provide much insight into the actual error distribution.
+Instead, we use the mean relative error (MRE), $\sum_i\Delta_\mathrm rE_i/N$, and the standard deviation of the relative errors (SDRE),
+\[ \text{SDRE}=\frac1N\sqrt{\sum_i(\Delta_\mathrm rE_i-\text{MRE})^2} \]
+This enables us to study both the systematic error of a method represented by MRE (overall underbinding or overbinding), as well as the ``statistical'' error represented by SDRE (how consistent a method is).
 
 \section{Results}
 
 Figure 1.\ shows the distributions of relative errors in binding energies on the S66x8 set of six different functionals (LDA, PBE, PBE0, B3LYP, SCAN, M06) combined with the MBD method.
-The values of the damping parameter $\beta$ 
+The values of the damping parameter $\beta$
 
-Figure 2.\ shows the dependency of the systematic and statistical errors on the respective damping parameters of three 
+Figure 2.\ shows the dependency of the systematic and statistical errors on the respective damping parameters of three
 
 Figure 1 shows the distributions of relative errors in binding energies across the intermolecular distances for several functionals combined with MBD at different values of the range-separation parameter $\beta$.
 The LDA functional without any long-range tail (LDA, no vdW) overbinds at short range and underbinds at long range, caused by the notorious vdW binding of LDA for the ``wrong'' reasons.
@@ -123,14 +104,14 @@ The binding caused by the LDA exchange decays quickly, so the long-range behavio
 In contrast, PBE+MBD (PBE, $\beta=0.83$) has a consistent behaviour across all distances, with the mean error being close to zero, and only the error variance increasing monotonously for shorter distances.
 PBE0+MBD (PBE, $\beta=0.83$) behaves very similarly to PBE+MBD, only with the error variance being somewhat reduced (but not the outliers).
 B3LYP, another hybrid GGA, is much more repulsive, and the optimal range separation is shorter (B3LYP, $\beta=0.67$).
-This does not necessarily mean that B3LYP is short-range though, and indeed B3LYP is still significantly repulsive even at the $\times$2 distances (cf. LDA).
+This does not necessarily mean that B3LYP is short-range though, and indeed B3LYP is still significantly repulsive even at the $\times$2 distances (cf.\ LDA).
 Furthermore, the error variance is significantly increased compared to PBE+MBD\@.
 This is caused for a large part by B3LYP underbinding hydrogen-bonded complexes even more than other binding patterns.
 Making the range separation in B3LYP+MBD even shorter than $\beta=0.67$ does not lead to further improvement.
 For the SCAN functional, we plot the error distributions for two distinct range separations, $\beta=1.1$ and $\beta=1.4$, minimizing the error variance and absolute mean error, respectively.
 As we show below, these two optimizations roughly coincide for PBE, but they do not for SCAN\@.
 
-The distributions of binding energy errors across a dataset and their dependence on 
+The distributions of binding energy errors across a benchmark set and their dependence on 
 
 \begin{figure*}
 \makebox[\textwidth][c]{\includegraphics{../media/s66-dists}}
@@ -170,6 +151,4 @@ The distributions of binding energy errors across a dataset and their dependence
 
 \section{Conclusions}
 
-\section{Calculation details}
-
-test
+\paragraph{Calculation details}
