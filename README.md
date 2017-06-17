@@ -1,4 +1,4 @@
-# Range of electron correlation in density functional theory
+# The range of semi-local density functionals in van der Waals systems
 
 ### Requirements
 
@@ -16,4 +16,4 @@ To generate figures and the manuscript:
 -   Full LaTeX installation
 -   [STIX fonts](http://www.stixfonts.org)
 
-The project uses [Caf](http://github.com/azag0/caf) to manage calculations, which is 
+The project uses [Caf](http://github.com/azag0/caf) to manage calculations.
