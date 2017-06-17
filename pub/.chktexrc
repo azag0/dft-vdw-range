@@ -6,6 +6,9 @@ DashExcpt = {
     Becke--Johnson
     Hartree--Fock
     Kohn--Sham
+    blue--red
+    C--H
+    C--C
 }
 CmdLine = {
 }

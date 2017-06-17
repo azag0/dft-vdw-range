@@ -1,7 +1,7 @@
 \section{Introduction}
 
 In a true many-body electronic wave function, the motions of electrons are dynamically correlated across the entire range of inter-electronic distances.
-A large part of this correlation is efficiently captured by various approximations to the Kohn--Sham density-functional theory (KS-DFT), which established it as a basic tool in computational chemistry and condensed-matter physics.
+A large part of this correlation is efficiently captured by various approximations to the Kohn--Sham density-functional theory (KS-DFT)~\cite{KohnPR65}, which established it as a basic tool in computational chemistry and condensed-matter physics.
 But the standard density functionals are semi-local in space, resulting in electron correlation energy that decays exponentially with distance---as if the electrons were essentially uncorrelated at long range (except for the special case of slowly-varying electron density).
 This leads to severe underestimation of van der Waals (vdW) dispersion interactions, which are mostly caused by long-range electron correlation.
 As these interactions strongly contribute to properties of nearly all biological and modern synthetic materials, many models were developed that account specifically for the long-range correlation~\cite{DionPRL04,VydrovJCP10a,JohnsonJCP06,TkatchenkoPRL09,GrimmeJCP10,AmbrosettiJCP14} to augment the semi-local (or hybrid) density-functional calculations.
@@ -22,6 +22,7 @@ Some aspects of the ``tail'' behaviour of semi-local density functionals in vdW 
 The Hartree--Fock (HF) model separates electron correlation into the exchange and ``pure'' correlation parts, the second of which is exclusively responsible for vdW attraction.
 This does not translate well into exchange and correlation as approximated by semi-local density functionals in DFT, where the exchange part often contributes much more than the correlation part to the vdW attraction at equilibrium distances.
 This behaviour is caused by the implicit cancellation of errors between the two parts, and is reflected by the fact that most of the literature on this topic is concerned with exchange, not correlation functionals.
+(See \mbox{ref.\!\citenum{PengPRX16}} for a more detailed discussion.)
 
 Nearly all exchange energy functionals of the electron density, $n$, are constructed such that they are exact for the uniform electron gas, and are therefore of the form
 \begin{equation}
@@ -37,7 +38,7 @@ The local density approximation (LDA, first rung) is defined by setting $F_\math
 In a generalized gradient approximation (GGA, second rung), the enhancement factor depends locally on the dimensionless density gradient, $s[n]=\lvert\boldsymbol\nabla n\rvert/2k_\text F(n)n$, $F_\mathrm x[n](\mathbf r)=F^\text{GGA}_\mathrm x(s[n](\mathbf r))$, and it is the particular form of $F^\text{GGA}_\mathrm x(s)$ that distinguishes different GGAs.
 Our study includes the GGA functional from Perdew, Burke, and Ernzerhof (PBE)~\cite{PerdewPRL96}.
 
-The search for semi-local functionals with the appropriate correlation range has been done mostly within the space of GGAs and in the context of the vdW-DF non-local functional~\cite{DionPRL04,LeePRB10}, a long-range correlation method whose correlation range is not easily modified.
+The search for semi-local functionals with the appropriate correlation range has been done mostly within the space of GGAs and in the context of the vdW-DF non-local functional~\cite{DionPRL04,LeePRB10,MurrayJCTC09}, a long-range correlation method whose correlation range is not easily modified.
 Several special-purpose functionals designed to combine well with long-range correlation models were developed, ranging from completely new constructions~\cite{PernalPRL09,WellendorffPRB12}, to recombinations of older forms~\cite{CooperPRB10,HamadaPRB14,BerlandPRB14}, to simple reparameterizations of standard functionals~\cite{ZhangPRL98,KlimesJPCM10,KlimesPRB11}.
 (An ``ideal'' exchange functional in this regard would be different from the exact exchange, because it would still contain a part of the short-range post-HF correlation that is not covered by GGA correlation functionals.)
 All of these functionals perform well for vdW-bound systems (when combined with a vdW model), but not much is known about their accuracy for other systems, preventing them from becoming general methods.
@@ -47,14 +48,21 @@ This includes the Laplacian of the density and the KS kinetic energy density, $\
 Two meta-GGAs are included in this study: TPSS~\cite{TaoPRL03} and the already mentioned SCAN\@.
 In both of them (and in SCAN only so), the kinetic energy density enters via a local density parameter, $\alpha[n](\mathbf r)$, that serves as a measure of localization of electrons~\cite{BeckeJCP90},
 \begin{equation}
-\alpha=(\tau-\tau^\text W)/\tau^\text{unif}\geq0
+  \alpha=(\tau-\tau^\text W)/\tau^\text{unif}\geq0
 \end{equation}
 where $\tau^\text W[n]=\lvert\boldsymbol\nabla n\rvert^2/8n$ is the von Weizsäcker kinetic energy functional, exact for single-orbital electron densities, and $\tau^\text{unif}(n)=3k_\text F(n)^2n/10$ is the Thomas--Fermi kinetic energy functional, exact for the uniform electron gas.
 This parameter can distinguish different kinds of electron density~\cite{SunPRL13}: $\alpha\approx0$ where a single orbital dominates the electron density, $\alpha\approx1$ for a slowly varying (metallic) electron density, and $\alpha\gg1$ where two closed-shell electron densities overlap, which is characteristic of vdW-bound systems in equilibrium (and to lesser degree also for inter-shell regions within atoms and molecules~\cite{BeckeJCP90}).
+SCAN uses this information directly by interpolating and extrapolating forms constructed for $\alpha=0$ and $\alpha=1$, using the following function:
+\begin{multline}
+  f(\alpha)=\exp(-c_\mathrm{1x}\alpha/(1-\alpha))\theta(1-\alpha)\\
+  -d_\mathrm x\exp(c_\mathrm{2x}/(1-\alpha))\theta(\alpha-1)
+  \label{eq:scan-interp}
+\end{multline}
+where $\theta$ is the Heaviside step function, and $c_\mathrm{1x}=0.667$, $c_\mathrm{2x}=0.8$, and $d_\mathrm x=1.24$ are three of the total seven parameters in SCAN which are determined by fitting to properties of several simple systems.
 
 The fourth rung of functionals contains GGAs and meta-GGAs with partial admixture of exact exchange, which is a nonlocal functional of the occupied orbitals.
 As in HF, exact exchange does not contribute to the vdW attraction at any distance, but substantially improves accuracy of (meta-)GGAs for many chemical problems. % chktex 36
-Here, we study the hybrid GGAs PBE0~\cite{AdamoJCP99} and B3LYP~\cite{BeckeJCP93}, and a hybrid meta-GGA M06~\cite{ZhaoTCA08}.
+Here, we study the hybrid GGAs PBE0~\cite{PerdewJCP96,AdamoJCP99} and B3LYP~\cite{BeckeJCP93}, and a hybrid meta-GGA M06~\cite{ZhaoTCA08}.
 We also briefly look at SCAN0~\cite{HuiJCP16}, a PBE0-like version of SCAN with 25\% of exact exchange.
 
 We do not include the fifth-rung functionals, such as the random-phase approximation or double-hybrid functionals, because they already contain long-range electron correlation by construction, at the price of much increased computational cost.
@@ -77,78 +85,152 @@ The particular form of damping in D3 received some attention~\cite{GrimmeJCC11,S
 Since our goal here is to cover a broad range of vdW models, we use the BJ damping for its distinction from the damping used in MBD\@.
 The BJ-damped D3 method uses three parameters that control its short-range behaviour: $s_8^\text{D3}$ controls global mixing of the dipole--quadrupole term (which is inherently short-range), and the closely related $a_1^\text{D3}$ and $a_2^\text{D3}$ control the onset of the dipole--dipole term ($a_1^\text{D3}$ scales vdW radii, $a_2^\text{D3}$ offsets them).
 
+\begin{figure*}[t!]
+\makebox[\textwidth][c]{\includegraphics{../media/s66-dists}}
+\caption{\textbf{Distributions of relative errors in binding energies on the S66 set of several DFT+MBD combinations.}
+The distributions are displayed as box-and-whisker plots: a box shows the quartiles and whiskers represent the rest of the distribution, except for outliers that are more than 2.5-fold the interquartile distance from the box, which are shown individually.
+The $x$-axis labels denote the functional and the value of the MBD range-separation parameter, $\beta^\text{MBD}$.
+The blue--red spectrum encodes the scaling, $q$, of the respective equilibrium distances of individual complexes.
+The green numbers indicate the mean absolute error (kcal/mol) for $q=1$.
+The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown for PBE, PBE0, B3LYP, and M06 optimize both mean and standard deviation of relative errors (MRE, SDRE) around $q=1$; $\beta=1.4$ for LDA optimizes MRE and SDRE for $q=2$; and for SCAN and all $q$, $\beta=1.1$ optimizes SDRE, and $\beta=1.4$ optimizes MRE\@.
+}\label{fig:s66-dists}
+\end{figure*}
+
 \paragraph{Van der Waals benchmark sets}
 
 Whereas the vdW models have explicit correlation range, the range of density functionals is only implicit, and the combined DFT+vdW models are therefore constructed by optimizing the range separation in vdW models against some benchmark properties, usually binding or lattice energies.
-Several benchmark sets of vdW-bound systems have been established, of which we use predominantly three: the S66 set of 66 smaller organic dimers~\cite{RezacJCTC11}, the X23 set of 23 molecular crystals~\cite{ReillyJCP13}, and the S12L set of 12 large supramolecular complexes~\cite{RisthausJCTC13}.
+Several benchmark sets of vdW-bound systems have been established, of which we use predominantly three: the S66 set of 66 smaller organic dimers~\cite{RezacJCTC11}, the X23 set of 23 molecular crystals~\cite{ReillyJCP13}, and the S12L set of 12 large supramolecular complexes~\cite{RisthausJCTC13,AmbrosettiJPCL14}.
 The S66 set is especially useful here, because each of the 66 dimers is calculated at 8 intermolecular distances distributed around the equilibrium distance.
 
 The raw results of evaluating a method on a benchmark set consist of the distribution of errors, $E_i-E_i^\text{ref}$.
 Since the interaction energies in vdW systems span orders of magnitude, we use relative errors, $\Delta_\mathrm rE_i=(E_i-E_i^\text{ref})/(-E_i^\text{ref})$ (assuming $E_i$ are negative).
 The comparison of error distributions between different methods is simplified by introducing various statistical measures.
-A popular measure is the mean absolute relative error (MARE), $\sum_i\lvert\Delta_\mathrm rE_i\rvert/N$, which serves well as a single-number indicator of performance, but does not provide much insight into the actual error distribution.
+Two popular measures are the mean mean absolute error (MAE), $\sum_i\Delta_\mathrm rE_i/N$, and absolute relative error (MARE), $\sum_i\lvert\Delta_\mathrm rE_i\rvert/N$, which serve well as a single-number indicator of performance, but do not provide much insight into the actual error distributions.
 Instead, we use the mean relative error (MRE), $\sum_i\Delta_\mathrm rE_i/N$, and the standard deviation of the relative errors (SDRE),
 \[ \text{SDRE}=\frac1N\sqrt{\sum_i(\Delta_\mathrm rE_i-\text{MRE})^2} \]
-This enables us to study both the systematic error of a method represented by MRE (overall underbinding or overbinding), as well as the ``statistical'' error represented by SDRE (how consistent a method is).
+This enables us to study both the systematic error of a method (overall underbinding or overbinding), represented by MRE, as well as the ``statistical'' error (how consistent a method is), represented by SDRE\@.
 
 \section{Results}
-
-Figure 1.\ shows the distributions of relative errors in binding energies on the S66x8 set of six different functionals (LDA, PBE, PBE0, B3LYP, SCAN, M06) combined with the MBD method.
-The values of the damping parameter $\beta$
-
-Figure 2.\ shows the dependency of the systematic and statistical errors on the respective damping parameters of three
-
-Figure 1 shows the distributions of relative errors in binding energies across the intermolecular distances for several functionals combined with MBD at different values of the range-separation parameter $\beta$.
-The LDA functional without any long-range tail (LDA, no vdW) overbinds at short range and underbinds at long range, caused by the notorious vdW binding of LDA for the ``wrong'' reasons.
-The binding caused by the LDA exchange decays quickly, so the long-range behaviour can be corrected well in LDA+MBD (LDA, $\beta=1.4$), however, the short-range behaviour is irreparable.
-In contrast, PBE+MBD (PBE, $\beta=0.83$) has a consistent behaviour across all distances, with the mean error being close to zero, and only the error variance increasing monotonously for shorter distances.
-PBE0+MBD (PBE, $\beta=0.83$) behaves very similarly to PBE+MBD, only with the error variance being somewhat reduced (but not the outliers).
-B3LYP, another hybrid GGA, is much more repulsive, and the optimal range separation is shorter (B3LYP, $\beta=0.67$).
-This does not necessarily mean that B3LYP is short-range though, and indeed B3LYP is still significantly repulsive even at the $\times$2 distances (cf.\ LDA).
-Furthermore, the error variance is significantly increased compared to PBE+MBD\@.
-This is caused for a large part by B3LYP underbinding hydrogen-bonded complexes even more than other binding patterns.
-Making the range separation in B3LYP+MBD even shorter than $\beta=0.67$ does not lead to further improvement.
-For the SCAN functional, we plot the error distributions for two distinct range separations, $\beta=1.1$ and $\beta=1.4$, minimizing the error variance and absolute mean error, respectively.
-As we show below, these two optimizations roughly coincide for PBE, but they do not for SCAN\@.
-
-The distributions of binding energy errors across a benchmark set and their dependence on 
-
-\begin{figure*}
-\makebox[\textwidth][c]{\includegraphics{../media/s66-dists}}
-\caption{\textbf{Label.} Text.
-}\label{fig:s66-dists}
-\end{figure*}
 
 \begin{figure*}
 \makebox[\textwidth][c]{
 \begin{tikzpicture}
-\node [below right] at (0,0) {\bfseries a};
-\node [below right] at (0,0) {\includegraphics{../media/mbd-param-fitting.pdf}};
-\node [below right] at (9.5,0) {\bfseries b};
-\node [below right] at (9.5,0) {\includegraphics{../media/vv10-param-fitting.pdf}};
-\node [below right] at (14.7,0) {\bfseries c};
-\node [below right] at (14.7,0) {\includegraphics{../media/d3-param-fitting.pdf}};
+\node[below right, anchor=base] at (0.5,-0.5) {\bfseries a};
+\node[below right] at (0,0) {\includegraphics{../media/mbd-param-fitting.pdf}};
+\node[below right, anchor=base] at (8.5,-0.5) {\bfseries b};
+\node[below right] at (8.,-0.3) {\includegraphics{../media/vv10-param-fitting.pdf}};
+\node[below right, anchor=base] at (13.6,-0.5) {\bfseries c};
+\node[below right] at (13.1,-0.3) {\includegraphics{../media/d3-param-fitting.pdf}};
 \end{tikzpicture}
 }
-\caption{\textbf{Label.} Text.
+\caption{\textbf{Dependence of means (MRE) and standard deviations (SDRE) of relative errors in binding energies on range-separation parameters.}
+Three long-range correlation models with their respective parameters are shown: (\textbf a) MBD with $\beta^\text{MBD}$, (\textbf b) VV10 with $b^\text{VV10}$, and (\textbf c) D3 with $a_2^\text{D3}$.
+Density functionals correspond to columns, and benchmark sets to rows within each subplot.
+SCAN* denotes two reparameterizations of the SCAN functional discussed in the text. % chktex 36
+The vertical dotted lines show where MRE equals to zero or SDRE reaches minimum.
+For DFT+D3, two choices are shown of the two other range-separation parameters in D3: $a_1^\text{D3}$ and $s_8^\text{D3}$.
 }\label{fig:param-fitting}
 \end{figure*}
 
-\begin{figure}
-\centering
-\includegraphics{../media/size-dependence}
-\caption{\textbf{Label.} Text.
-}\label{fig:size-dependence}
-\end{figure}
+To study the range of the density functionals LDA, PBE, PBE0, B3LYP, SCAN, SCAN0, and M06, we evaluated them, as well as the vdW methods MBD, VV10, and D3 at a range of their respective range-separation parameters, on the benchmark sets S66, X23, S12L, and other sets not discussed in this text.
+We present a subset of these results below in Figures~\ref{fig:s66-dists} and~\ref{fig:param-fitting}, while the full data and computational details are given in Supplementary Information.
+
+On the case of the S66 set and different DFT+MBD combinations, Figure~\ref{fig:s66-dists} shows that summarizing the error distributions into a single number such as the mean absolute error reduces the method comparison to a one-dimensional classification, whereas comparing the full distributions in fact reveals distinct patterns specific to individual functionals.
+Of the tested functionals, LDA is the only one that systematically overbinds S66 at equilibrium even without any long-range correction.
+At the same time, when the equilibrium distances are scaled by 2, LDA predicts essentially no binding.
+In this regard, although LDA binds vdW systems in equilibrium (too) strongly, it is very short-ranged,.
+The tail behaviour can be fixed accurately by MBD with $\beta^\text{MBD}=1.4$, but of course nothing can be done about the short range.
+The increased overestimation of electron correlation with decreased distance then leads to the well-known underestimation of binding distances by LDA\@.
+Already LDA thus illustrates that the degree to which a (semi-)local functional binds vdW systems is in general inconsequential for how well-suited it is for a combined DFT+vdW method. % chktex 36
+
+In contrast, both PBE and PBE0 are strongly underbinding S66 on their own, but with MBD and appropriate range separation ($\beta^\text{MBD}\approx0.83$), the resulting PBE+MBD and PBE0+MBD methods are well balanced, with symmetric error distributions, MAE independent of distance, and SDRE monotonously increasing at shorter distances.
+The admixture of exact exchange decreases SDRE from 10.2\% with PBE to 8.7\% with PBE0 at equilibrium, but in general has only a small effect.
+Another hybrid GGA, B3LYP, behaves as a true opposite of LDA, being at the same time very repulsive, yet quite long-ranged.
+Even with a fairly short-range correlation covered by MBD ($\beta^\text{MBD}\approx0.7$), B3LYP+MBD still underbinds at equilibrium, and perhaps more surprisingly at longer distances.
+In contrast to PBE/PBE0, the distributions are highly asymmetric, with underbound outliers being mostly the hydrogen-bonded complexes.
+
+With SCAN, optimizing for MRE and SDRE leads to different values of $\beta^\text{MBD}$, 1.4 and 1.1, respectively.
+Both of these are substantially larger than that for PBE, illustrating the longer range of SCAN\@.
+When SDRE is optimized, SCAN+MBD overbinds by 10--15\% (MRE) for all distances, but SDRE is well balanced, and much better than that of PBE+MBD at short distances.
+This should result in better predicted geometries.
+When MRE is optimized, the profile of SCAN+MBD is similar to PBE+MBD, but with overall worse SDRE\@.
+Adding exact exchange in SCAN0 (not shown) has even smaller effect than in PBE0, making the SCAN and SCAN0 error distributions almost indistinguishable.
+Finally, M06 requires roughly the same amount of long-range correlation as SCAN, and most of the complexes from the S66 set are described well around equilibrium.
+But several outliers are strongly overbound, and all complexes are overbound at longer distances, which is in line with previous studies~\cite{GoerigkJPCL15}.
+Both issues may stem from the fact that M06 is parametrized on the S22 set, roughly a subset of S66, but S66 contains additional complexes and out-of-equilibrium complexes for which M06 was not ``trained''.
+
+Of the tested functionals, PBE/PBE0 and SCAN show a potential to work as general balanced DFT+vdW methods, but there is ambiguity in the range of the SCAN functional.
+To rule out the possibility that this is simply the inability of MBD to adapt to a potentially more complex implicit range of SCAN with respect to PBE, we studied how MRE and SDRE of their combinations with MBD, VV10, and D3 depend on the respective range-separation parameters (Figure~\ref{fig:param-fitting}).
+Comparing the results for the S66 set shows that the ambiguity in the range of SCAN is in fact universal across all vdW models, and not specific to MBD\@.
+It is the case even for D3, which is potentially more flexible when adapting to a functional thanks to its three parameters.
+
+Furthermore, Figure~\ref{fig:param-fitting} shows that whereas the optimal range separation of the vdW models is shared across different system types for the PBE functional, this is not the case for SCAN\@.
+For SCAN, the discrepancy between MRE- and SDRE-optimizing range separation is even larger on the X23 set, but then it is reduced almost to zero for the S12L.
+Whereas the MRE-optimizing range separation is roughly constant across the benchmark sets, the SDRE-optimizing parameters differ substantially between S66 and X23 on one hand, and S12L on the other.
+All these observations are true for all three vdW models.
 
 \begin{figure}
-
-\centering
-\includegraphics{../media/flakes}
-\caption{\textbf{Label.} Text.
+\makebox[\linewidth][c]{
+\begin{tikzpicture}
+\node[below right] at (1.1,.1) {\includegraphics[height=1.2cm]{../media/bz2.png}};
+\node[below right] at (2.2,.1) {\includegraphics[height=1.2cm]{../media/cor21.png}};
+\node[below right] at (3.5,.1) {\includegraphics[height=1.2cm]{../media/cor22.png}};
+\node[below right] at (6.7,0) {\includegraphics[height=1.0cm]{../media/gr2.png}};
+\node[below right] at (0,-1) {\includegraphics{../media/flakes.pdf}};
+\end{tikzpicture}
+}
+\caption{\textbf{Binding energies of graphene-flake dimers.}
+The individual data points correspond to (increasing in size) benzene, naphtalene, pyrene, coronene, two larger circular hexagonal flakes (shown), and graphene.
+All dimers are in a parallel-displaced configuration, as cut out from a graphite crystal without any geometry relaxations.
+The geometries and computational details are available in Supplementary Information.
+The plotted quantity is binding energy with respect to the LDA binding energy, per carbon atom.
+The (infinite) number of atoms in graphene is set arbitrarily to 500.
 }\label{fig:flakes}
 \end{figure}
 
-\section{Conclusions}
+To gain further insight into the range of the functionals beyond statistical analysis, we calculated the binding energies of a series of graphene-flake dimers dimers ranging from a benzene dimer to a graphene bilayer using DFT without any vdW models (Figure~\ref{fig:flakes}).
+We consider LDA as a reference short-range functional, and PBE+MBD as a reference full-range method.
+The functionals B3LYP, PBE, and TPSS have a similar behavior to LDA, with the binding energies being offset only by a constant.
+In contrast, the SCAN and M06 show a much stronger dependence on the system size, both at the smaller and larger ends of the spectrum.
+The difference in the offset to LDA between benzene dimer and graphene is 60\% for M06 and 35\% for SCAN with respect to PBE+MBD\@.
+The ability to capture at least partially this system-size effect could be seen as advantageous, but it is unfortunate for developing DFT+vdW methods, because it breaks the core assumption that the functionals behave as short-range models of the electron correlation.
+After all, these functionals are semi-local by construction and the fact that they are sensitive to this strongly nonlocal environment is contradicting that.
 
-\paragraph{Calculation details}
+\begin{figure}
+\centering
+\includegraphics{../media/scan-interp}
+\caption{\textbf{Interpolation and extrapolation used in the SCAN exchange functional.}
+The fixed points that are inter- and extrapolated are $\alpha=0$ and $\alpha=1$.
+The shape of the function is controlled with three parameters, $c_\mathrm{1x}=0.667$, $c_\mathrm{2x}=0.8$, and $d_\mathrm x=1.24$ (original values).
+}\label{fig:scan-interp}
+\end{figure}
+
+Both SCAN and M06 are meta-GGAs, but so is TPSS, which does not show this sensitivity.
+We speculate, and partially substantiate this speculation, that in case of SCAN, this sensitivity is caused by the particular parametrization of its dependence on the dimensionless electron localization parameter, $\alpha$ (see Background).
+The values of $\alpha$ typically count in units within electronic valence shells and decay slowly to zero with distance from the electronic system, while crossing $\alpha=1$ at some point~\cite{SunPRL13,BeckeJCP90}.
+Among meta-GGA functionals, SCAN has a relatively wide plateau around $\alpha=1$ (due to Eq.~\ref{eq:scan-interp}), where the enhancement factor, $F_\mathrm x$, is equal to 1, the value for the uniform electron gas~\cite{LoosJCP17}.
+This results in spatial regions in the electron density tails (dominated by HOMO, the highest-occupied molecular orbital) that are described with a uniform-like functional instead of the more appropriate single-orbital form of $\alpha\approx0$.
+This can lead to sudden spikes in the exchange-correlation potential fairly outside the spatial regions where covalent bonding occurs~\cite{Gerit-private}.
+
+In the series of graphene-flake dimers, the electronic gap (calculated with SCAN) decreases from 4.7\,eV for benzene dimer to 0.9\,eV for graphene bilayer, which makes the density tail decay slower with increasing system size.
+Because the $\alpha=1$ behaviour of SCAN makes it quite sensitive in the density tails, whose overlap also encodes the vdW bonding on the electron-density level, it only makes sense that SCAN is able to extract the nonlocal information about the system size via the decreasing electronic gap.
+This mechanism could be also partially responsible for the discrepancies in optimal range separation for SCAN observed on the S66, X23, and S12L sets.
+To check this hypothesis, we constructed two reparameterizations of SCAN and tested them on these benchmark sets.
+We focused on the three parameters in Eq.~\ref{eq:scan-interp} because their values are determined only weakly, having been fitted only to system-specific rather than universal norms.
+We found that either changing $c_\mathrm{2x}$ from 0.8 to 0.3 or changing $d_\mathrm x$ from 1.24 to 2 (Figure~\ref{fig:scan-interp}) substantially improves the consistency of SCAN in describing vdW systems (Figure~\ref{fig:param-fitting}a), by removing the ambiguity in whether to optimize for MRE or SDRE\@.
+The overall performance is also improved, bringing MARE of SCAN*+MBD on S66 to only 4.5\% in both cases, a two-fold improvement over PBE+MBD\@.
+Both reparameterizations change behaviour of the functional in the regions of overlap of closed shells, making the slopes of the interpolating function more similar on both sides of $\alpha=1$.
+This is in line with the hypothesis that it is the behavior around $\alpha=1$ (uniform-gas limit) that is causing the imbalanced behaviour for vdW systems.
+The $c_\mathrm{2x}$-variant retains the longer range of SCAN (optimal $\beta^\text{MBD}$ of 1.1 on S66), while the $d_\mathrm x$-variant brings it closer to that of PBE ($\beta^\text{MBD}$ of 0.9).
+However, both reparameterizations still suffer from dependence of the optimal range separation on system type (cf. PBE), with optimal $\beta^\text{MBD}$ for X23 and S12L being larger by 0.1 than for S66.
+
+\section{Discussion}
+
+SCAN has been previously combined with VV10 by \citet{PengPRX16} and with D3 and VV10 by \citet{BrandenburgPRB16}.
+The obtained optimal values of $b^\text{VV10}$ were 15.7 and 14.0, respectively, and optimal parametrization of D3 was found to be $s_8^\text{D3}=0$, $a_1^\text{D3}=0.54$ and $a_2^\text{D3}=5.4$.
+From Fig.~\ref{fig:param-fitting}, this corresponds to a compromise between the systematic (MRE) and statistical (SDRE) error for SCAN+VV10, and to optimal statistical error for SCAN+D3, in all cases leading to some degree of systematic overbinding.
+\citet{BrandenburgPRB16} associated this tendency mainly with hydrogen-bonded systems, which is in line with the observed overbinding of various ice structures by SCAN (without any vdW correction)~\cite{ChenPRB16}.
+
+\citet{PengPRX16} argued that 
+
+\section{Conclusions}
