@@ -3,7 +3,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{stix}
 \usepackage{microtype}
-\usepackage[usenames,dvipsnames]{color}
+\usepackage[usenames,dvipsnames]{xcolor}
 \usepackage[colorlinks,citecolor=Gray,urlcolor=Gray,linkcolor=Cyan]{hyperref}
 \usepackage[tiny]{titlesec}
 
@@ -21,33 +21,35 @@
 \renewcommand{\captionfont}{\small}
 \renewcommand{\captionlabelfont}{\bfseries}
 
-%\usepackage[semicolon,sort&compress]{natbib}
-\usepackage[comma,super,sort&compress]{natbib}
-\usepackage{natmove}
+\usepackage[numbers,sort&compress]{natbib}
 \bibliographystyle{achemso}
-\renewcommand\cite{\citep}
-\AtBeginDocument{\nocite{achemso-control}}
-
 \newcommand\doi[1]{\href{http://dx.doi.org/#1}{\nolinkurl{#1}}}
+\begin{filecontents}{achemso-control.bib}
+@Control{achemso-control,
+  ctrl-article-title  = "no",
+  ctrl-chapter-title  = "yes",
+  ctrl-doi            = "yes",
+  ctrl-etal-number    = "10",
+  ctrl-etal-firstonly = "yes",
+}
+\end{filecontents}
 
 \input{preamble.tex}
 \input{front-matter.tex}
-
-%\usetikzlibrary{external}
-%\tikzexternalize[force remake=true,optimize=false]
 
 \author[1]{Jan Hermann}
 \author[1]{Matthias Scheffler}
 \author[2,*]{Alexandre Tkatchenko}
 \affil[1]{Fritz-Haber-Institut der Max-Planck-Gesellschaft, Faradayweg 4--6, 14195 Berlin, Germany}
 \affil[2]{Physics and Materials Science Research Unit, University of Luxembourg, 162A Avenue de la Faïencerie, L-1511 Luxembourg}
-\affil[*]{\normalfont{Email: alexandre.tkatchenko@uni.lu}}
 
 \date{}
 
 \setcounter{secnumdepth}{0}
 
 \begin{document}
+
+\nocite{achemso-control}
 
 \twocolumn[
   \maketitle
@@ -58,6 +60,11 @@
   \vspace{1em}
 ]
 
+\begingroup
+\renewcommand\thefootnote{}\footnote{$^*$Email: alexandre.tkatchenko@uni.lu}%
+\addtocounter{footnote}{-1}%
+\endgroup
+
 \input{text.tex}
 
 \section{Acknowledgements}
@@ -66,7 +73,7 @@
 \renewcommand{\section}[2]{}
 \setlength\bibsep{0pt}
 \footnotesize
-\bibliography{achemso,refs}
+\bibliography{refs-zotero,refs,achemso-control}
 \endgroup
 
 \end{document}
