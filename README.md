@@ -2,9 +2,9 @@ This git repo contains all resources for the manuscript *The range of semi-local
 
 ## Requirements
 
-All Python code in the repository requires Python 3.6. The following Python packages are required at various stages (all available on PyPI): jupyter, numpy, scipy, docopt, pandas, seaborn, h5py.
+All Python code in the repository requires Python 3.6. The required python packages can be installed with `pip install -r requirements.txt`.
 
-To generate figures and the manuscript:
+Further, to generate figures and the manuscript:
 
 -   Full LaTeX installation
 -   [STIX fonts](http://www.stixfonts.org)
@@ -26,7 +26,7 @@ To calculate raw data:
 
 - `/data/`: This empty directory holds processed data. These can be generated either by running all `/src/collect_*.py` scripts, or downloaded from [here](https://figshare.com/account/articles/5117167).
 
-- `/calc/`: This folder contains all raw calculations organized in four subfolders. Each of them is managed with [Caf](https://github.com/azag0/caf), which is already included individually in each subfolder. With Caf, one can in principle regenerate all inputs files (the calculations in each subfolder are defined in `cscript.py`), and then use it to run all the calculations to obtain the output files. But this requires nontrivial amount of computational time and is not documented here. Instead, all generated input and output files are provided as tar archives which can be downloaded from [here](https://figshare.com/articles/2017-01-23-all-vdw-sets-3_tar_gz/5117191). The tar archives are unpacked with `tar -xf <archive>` in each subfolder. Once unpacked, the files can be verified by running `./caf status`. The complete directory tree of all input and output files can be checked out with `./caf checkout`.
+- `/calc/`: This folder contains all raw calculations organized in four subfolders. Each of them is managed with [Caf](https://github.com/azag0/caf), which is already included individually in each subfolder. With Caf, one can in principle regenerate all inputs files from scratch (the calculations in each subfolder are defined in `cscript.py`), and then use it to run all the calculations to obtain the output files. But this requires nontrivial amount of computational time and is not documented here. Instead, all generated input and output files are provided as tar archives which can be downloaded from [here](https://figshare.com/articles/2017-01-23-all-vdw-sets-3_tar_gz/5117191). The tar archives are unpacked with `tar -xf <archive>` in each subfolder. Once unpacked, the files can be verified by running `./caf status`. The complete directory tree of all input and output files can be checked out with `./caf checkout`.
 
     Pseudopotentials used in Quantum Espresso, which are not part of the input files, were downloaded from [here](http://www.quantum-espresso.org/pseudopotentials/) and [here](http://www.quantum-simulation.org/potentials/sg15_oncv/).
 
