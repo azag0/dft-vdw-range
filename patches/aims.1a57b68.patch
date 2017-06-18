@@ -1,0 +1,3751 @@
+master: b4905993ead4d7c6b6de9904b8f97e6b11a60d38
+diff --git a/Makefile.backend b/Makefile.backend
+index a5ec7e82..aa6bb2e8 100644
+--- a/Makefile.backend
++++ b/Makefile.backend
+@@ -378,7 +378,6 @@ EXTERNAL_U = \
+ 	   external/pw_lda.o\
+ 	   external/boys.o\
+            external/tpss.o \
+-           xc_dfauto/xc_func.o \
+            external/meta_scan.o \
+ 	   external/density_functional_repository/f77_x_lda.o \
+ 	   external/density_functional_repository/f77_x_b3.o \
+@@ -512,6 +511,7 @@ SUBROUTINES_U = \
+               evaluate_pot_superpos_p0.o \
+               evaluate_xc.o \
+               evaluate_xc_split.o \
++           	  xc_dfauto/xc_func.o \
+               get_rho_mp.o \
+               get_rho_mp_single_center.o \
+               nlcorr.o \
+@@ -1429,6 +1429,7 @@ MODULES_U = \
+           octree_routines.o \
+           xc.o \
+           xc_library.o \
++          xc_dfauto/xc_func_params.o \
+           lapack_wrapper.o \
+           precondition.o \
+           lpb_solver_utilities.o \
+diff --git a/dimensions.f90 b/dimensions.f90
+index 9fd71572..85ab4ab7 100644
+--- a/dimensions.f90
++++ b/dimensions.f90
+@@ -2455,6 +2455,7 @@ module dimensions
+                      ! parameters for bse
+                      (desc_str.eq."read_write_qpe") .or. &
+                      (desc_str.eq."bse_s_t") &
++                     .or. (desc_str == "xc_param") &
+                      ) then
+    !           all other keywords do not matter
+    !           BUT list them anyway - if you introduce an unknown keyword and the
+diff --git a/mbd-std/mbdvdw.f90 b/mbd-std/mbdvdw.f90
+index 69dbf90a..45f5b0ad 100644
+--- a/mbd-std/mbdvdw.f90
++++ b/mbd-std/mbdvdw.f90
+@@ -1858,6 +1858,7 @@ module mbdvdw_module
+     Spq(2) = ainv_in(2,1)*rpq(1) + ainv_in(2,2)*rpq(2) + ainv_in(2,3)*rpq(3)
+     Spq(3) = ainv_in(3,1)*rpq(1) + ainv_in(3,2)*rpq(2) + ainv_in(3,3)*rpq(3)
+     sc = mbdvdw_circumscribe(h_in, Rc)
++    if(mbd_vdw_isolated) sc = 0
+     do n1 = -sc(1), sc(1), 1
+       do n2 = -sc(2), sc(2), 1
+         do n3 = -sc(3), sc(3), 1
+@@ -4205,7 +4206,7 @@ module mbdvdw_module
+             write(stdout, '(3X, F14.10, F14.10, F14.10)') Htmp(s, 1), Htmp(s, 2), Htmp(s, 3)
+             end do
+ 
+-          Htmp = -2.0_DP*MATMUL( HmbdvdW, transpose(h_) )/nu
++          Htmp = -2.0_DP*MATMUL( HmbdvdW, transpose(h_) )/nu*sl_i*sl_j*sl_k
+           write(stdout, '(3X, "MBD Stresses [Ry]")')
+           write(stdout, '(3X, "DX       DY       DZ")')
+           do s = 1, 3, 1
+diff --git a/mbd-std/quadrature_grid.f90 b/mbd-std/quadrature_grid.f90
+index 1e0aab39..af66c876 100644
+--- a/mbd-std/quadrature_grid.f90
++++ b/mbd-std/quadrature_grid.f90
+@@ -18,7 +18,9 @@ contains
+ subroutine generate_grid(npts_in, npts_out)
+    integer, intent(in) :: npts_in
+    integer, intent(out) :: npts_out
++   if(allocated(casimir_omega)) deallocate(casimir_omega)
+    if(.not.allocated(casimir_omega)) allocate(casimir_omega(npts_in+1))
++   if(allocated(casimir_omega_weight)) deallocate(casimir_omega_weight)
+    if(.not.allocated(casimir_omega_weight)) allocate(casimir_omega_weight(npts_in+1))
+    npts_out = npts_in+1
+ 
+diff --git a/read_control.f90 b/read_control.f90
+index 51d90aa3..4b236c53 100644
+--- a/read_control.f90
++++ b/read_control.f90
+@@ -60,6 +60,7 @@ subroutine read_control ( )
+    use dmft_para
+    use xc_f03_lib_m 
+    use xc_library
++   use xc_func_params, only: set_xc_param
+    use esp_charges, only: read_esp_parameters
+    use crpa_blacs, only : blacsdim
+    use cpt2_blacs, only : blacsdim_cpt2, pair_block_cpt2
+@@ -3356,6 +3357,15 @@ subroutine read_control ( )
+ 
+             flag_hse_unit = .true.
+ 
++         case ('xc_param')
++             buffer_arr(:) = ''
++             read (inputline, *, end=88, err=99) desc_str, buffer_arr(1:2)
++             call set_xc_param(buffer_arr(1), buffer_arr(2), i_flag)
++             if (i_flag > 0) go to 99
++             if (i_flag == -100) then
++                 if (myid == 0) write (use_unit, *) 'Unknown parameter:', buffer_arr(1)
++                 go to 99
++             end if
+          case('use_hf_kspace')
+             read(inputline,*,end=88,err=99) desc_str, use_hf_kspace
+             if(use_hf_kspace) then
+diff --git a/xc_dfauto/.gitignore b/xc_dfauto/.gitignore
+index 91a11cf0..51ecc628 100644
+--- a/xc_dfauto/.gitignore
++++ b/xc_dfauto/.gitignore
+@@ -1,2 +1,4 @@
+ /*.tex
+ /dfauto
++/dfauto.patched
++/testing*/
+diff --git a/xc_dfauto/Makefile b/xc_dfauto/Makefile
+index 6309fe70..f9daeda2 100644
+--- a/xc_dfauto/Makefile
++++ b/xc_dfauto/Makefile
+@@ -4,19 +4,32 @@ FUNCS := $(sort $(wildcard *.df))
+ 
+ all: xc_func.f
+ 
+-xc_func.f: xc_func.template.f ${FUNCS} | dfauto
++xc_func.f: xc_func.template ${FUNCS} | dfauto.patched
+ 	cp $< $@
+-	FC=${FC} TMPDIR= sh $| -a -m -o $@ ${FUNCS}
++	$(FC) -c xc_func_params.f90
++	FC="${FC} -J .. ../xc_func_params.o" TMPDIR= sh $| -a -m -o $@ ${FUNCS}
++	rm -f xc_func_params.mod xc_func_params.o
++
++dfauto.patched: dfauto dfauto.patch
++	cp $< $@
++	patch $@ dfauto.patch
+ 
+ dfauto:
+ 	$(info The dfauto script can be downloaded from http://cpc.cs.qub.ac.uk/summaries/ADNY_v1_0.html.)
+ 	$(error dfauto missing, cannot proceed)
+ 
+ rebuild:
+-	touch xc_func.template.f
++	touch xc_func.template
+ 	@${MAKE}
+ 
+-doc:
+-	FC=${FC} TMPDIR= sh dfauto -l -t a4paper -x 12pt *.df
++doc: doc.pdf
++
++doc.pdf: ${FUNCS} | dfauto.patched
++	FC=${FC} TMPDIR= sh $| -l -t a4paper -x 12pt ${FUNCS}
+ 	dvipdfm -o doc.pdf acg.dvi
+-	rm acg.*
++	rm -f acg.*
++
++clean:
++	rm -f $(FUNCS:%.df=%.tex)
++	rm -rf $(wildcard testing*)
++	rm -f dfauto.patched
+diff --git a/xc_dfauto/dfauto.patch b/xc_dfauto/dfauto.patch
+new file mode 100644
+index 00000000..9771ec13
+--- /dev/null
++++ b/xc_dfauto/dfauto.patch
+@@ -0,0 +1,51 @@
++241c241
++<     "\\\qsigma_\{\\\alpha \\\beta\}" \
++---
++>     "\\\sigma_\{\\\alpha \\\beta\}" \
++965,966d964
++< c    Generated: `date`
++< 
++974c972,973
++<       implicit double precision (a-h,o-z)
++---
++>       use xc_func_params
++>       implicit real*8 (r,s,t,u,z,v)
++988a988
++>       pi=acos(-1d0)
++1010,1012c1010,1013
++< # define procedure Fortran
++< Fortran:=proc(a)
++<   fortran(evalf(a),precision=double,filename="$dftempfile2",optimized,mode=double);
++---
++> with(CodeGeneration):
++> # define procedure fortran
++> fortran:=proc(a)
++>   Fortran(evalf(a),precision=double,output="$dftempfile2",optimize,limitvariablelength=false);
++1322c1323
++<     Fortran(rholist):
++---
++>     fortran(rholist):
++1324c1325
++<     Fortran(elistb):
++---
++>     fortran(elistb):
++1326c1327
++<     Fortran(elista):
++---
++>     fortran(elista):
++1328c1329
++<     Fortran(elist):
++---
++>     fortran(elist):
++1332c1333
++<     Fortran(rholist):
++---
++>     fortran(rholist):
++1334c1335
++<     Fortran(elist):
++---
++>     fortran(elist):
++1337c1338
++<     Fortran(elistc):
++---
++>     fortran(elistc):
+diff --git a/xc_dfauto/scanx.df b/xc_dfauto/scanx.df
+index 60cf1417..15df1682 100644
+--- a/xc_dfauto/scanx.df
++++ b/xc_dfauto/scanx.df
+@@ -22,17 +22,17 @@ end;
+ Gx := proc(s)
+     1-exp(-a1/sqrt(s))
+ end;
+-a1 := 4.9479;
+-muak := 10/81;
++a1 := paramscanxa1;
++muak := paramscanxmuak;
+ b2 := sqrt(5913/405000);
+ b1 := (511/13500)/(2*b2);
+ b3 := 0.5;
+-hx0 := 1.174;
++hx0 := paramscanxhx0;
+ b4 := muak^2/k1-1606/18225-b1^2;
+-c1x := 0.667;
+-c2x := 0.8;
+-dx := 1.24;
+-k1 := 0.065;
++c1x := paramscanxc1x;
++c2x := paramscanxc2x;
++dx := paramscanxdx;
++k1 := paramscanxk1;
+ 
+ f := 0;
+ g := rho(s)*epsilon[Xscan](2*rho(s), 2*sqrt(sigma(ss)), 2*tau(s)/2);
+diff --git a/xc_dfauto/xc_func.f b/xc_dfauto/xc_func.f
+index 3bf7f9d4..3ac0d082 100644
+--- a/xc_dfauto/xc_func.f
++++ b/xc_dfauto/xc_func.f
+@@ -100,8 +100,6 @@ c:dfauto
+       end
+ c:DIRACXsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:12 CEST 2016
+-
+       subroutine dftacg_diracx
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -109,7 +107,8 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -132,13 +131,12 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       t1 = pi ** 2
+       t3 = (t1 * rhob) ** (0.1D1 / 0.3D1)
+       t5 = 0.1D1 / pi
+@@ -148,9 +146,8 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+       t15 = 0.227140074104017457361D0 * rhob / t11 * pi
+       vrhoc(i) = vrhoc(i) - t10 - t15
+       vrhoo(i) = vrhoo(i) + t10 + t15
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       t1 = pi ** 2
+       t3 = (t1 * rhoa) ** (0.1D1 / 0.3D1)
+       t5 = 0.1D1 / pi
+@@ -160,9 +157,8 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+       t15 = 0.227140074104017457361D0 * rhoa / t11 * pi
+       vrhoc(i) = vrhoc(i) - t10 - t15
+       vrhoo(i) = vrhoo(i) - t10 - t15
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t1 = pi ** 2
+       t3 = (t1 * rhoa) ** (0.1D1 / 0.3D1)
+       t5 = 0.1D1 / pi
+@@ -177,7 +173,6 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+       t27 = 0.227140074104017457361D0 * rhob / t23 * pi
+       vrhoc(i) = vrhoc(i) - t15 - t20 - t22 - t27
+       vrhoo(i) = vrhoo(i) - t15 - t20 + t22 + t27
+-
+                endif
+              endif
+            enddo
+@@ -185,32 +180,28 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       t1 = pi ** 2
+       t3 = (t1 * rhob) ** (0.1D1 / 0.3D1)
+       zk(i) = -0.136284044462410474417D1 * rhob * t3 / pi
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       t1 = pi ** 2
+       t3 = (t1 * rhoa) ** (0.1D1 / 0.3D1)
+       zk(i) = -0.136284044462410474417D1 * rhoa * t3 / pi
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t1 = pi ** 2
+       t3 = (t1 * rhoa) ** (0.1D1 / 0.3D1)
+       t5 = 0.1D1 / pi
+       t9 = (t1 * rhob) ** (0.1D1 / 0.3D1)
+       zk(i) = -0.136284044462410474417D1 * rhoa * t3 * t5 - 0.1362840444
+      #62410474417D1 * rhob * t9 * t5
+-
+                endif
+              endif
+            enddo
+@@ -220,7 +211,7 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       t3 = pi ** 2
+@@ -234,14 +225,13 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+       vrhoc(i) = vrhoc(i) - 0.681420222312052372084D0 * t5 * t7 - 0.2271
+      #40074104017457361D0 * rhoa / t18 * pi - 0.681420222312052372084D0 
+      #* t11 * t7 - 0.227140074104017457361D0 * rhob / t25 * pi
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       t3 = pi ** 2
+@@ -250,7 +240,6 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+       t11 = (t3 * rhob) ** (0.1D1 / 0.3D1)
+       zk(i) = -0.136284044462410474417D1 * rhoa * t5 * t7 - 0.1362840444
+      #62410474417D1 * rhob * t11 * t7
+-
+              endif
+            enddo
+          endif
+@@ -262,8 +251,6 @@ c    Generated: Mon Jun 20 16:05:12 CEST 2016
+ c:DIRACXsubrend
+ c:PBECsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:13 CEST 2016
+-
+       subroutine dftacg_pbec
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -271,7 +258,8 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -294,13 +282,12 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -402,9 +389,8 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+       vsigmacc(i) = vsigmacc(i) + t209
+       vsigmaco(i) = vsigmaco(i) - 0.767132048600136726458D-1 * t208
+       vsigmaoo(i) = vsigmaoo(i) + t209
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -506,9 +492,8 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+       vsigmacc(i) = vsigmacc(i) + t209
+       vsigmaco(i) = vsigmaco(i) + 0.767132048600136726458D-1 * t208
+       vsigmaoo(i) = vsigmaoo(i) + t209
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -729,7 +714,6 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      # t119 * sigma * t127)) * t228
+       vsigmaco(i) = vsigmaco(i)
+       vsigmaoo(i) = vsigmaoo(i)
+-
+                endif
+              endif
+            enddo
+@@ -737,13 +721,12 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -776,9 +759,8 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      # * t50 * t28 / t52 * t55 / t56 / t59))
+       zk(i) = rhob * (-0.3109070D-1 * t26 + 0.153426409720027345292D0 / 
+      #t28 * t70)
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -811,9 +793,8 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      # * t50 * t28 / t52 * t55 / t56 / t59))
+       zk(i) = rhoa * (-0.3109070D-1 * t26 + 0.153426409720027345292D0 / 
+      #t28 * t70)
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -882,7 +863,6 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      #8132D-4 * t115 * t81 / t117 * t120 / t122 / t124 * t57))
+       zk(i) = rho * (-t29 + t63 + t80 + 0.306852819440054690583D0 / t81 
+      #* t89 * t137)
+-
+                endif
+              endif
+            enddo
+@@ -892,7 +872,7 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -1105,14 +1085,13 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      # * t127 - 0.942319250876317101329D-2 * t199 * t170 * t201 * (0.942
+      #319250876317101329D-2 * t104 * t107 + 0.177593114114420689627D-3 *
+      # t115 * sigma * t123)) * t224
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -1179,7 +1158,6 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+      #8132D-4 * t111 * t77 / t113 * t116 / t118 / t120 * t53))
+       zk(i) = rho * (-t25 + t59 + t76 + 0.306852819440054690583D0 / t77 
+      #* t85 * t133)
+-
+              endif
+            enddo
+          endif
+@@ -1191,8 +1169,6 @@ c    Generated: Mon Jun 20 16:05:13 CEST 2016
+ c:PBECsubrend
+ c:PBEXsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:15 CEST 2016
+-
+       subroutine dftacg_pbex
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -1200,7 +1176,8 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -1223,13 +1200,12 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -1262,9 +1238,8 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+       vsigmacc(i) = vsigmacc(i) - t62
+       vsigmaco(i) = vsigmaco(i) + 0.114750570667965607021D-2 * t61
+       vsigmaoo(i) = vsigmaoo(i) - t62
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -1297,9 +1272,8 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+       vsigmacc(i) = vsigmacc(i) - t62
+       vsigmaco(i) = vsigmaco(i) - 0.114750570667965607021D-2 * t61
+       vsigmaoo(i) = vsigmaoo(i) - t62
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -1356,7 +1330,6 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+       vsigmaco(i) = vsigmaco(i) - 0.114750570667965607021D-2 * t106 + 0.
+      #114750570667965607021D-2 * t112
+       vsigmaoo(i) = vsigmaoo(i) - t107 - t113
+-
+                endif
+              endif
+            enddo
+@@ -1364,13 +1337,12 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -1382,9 +1354,8 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+       zk(i) = -0.136284044462410474417D1 * rhob * t10 / pi * (0.1804D1 -
+      # 0.804D0 / (0.1D1 + 0.209451650699150979027D-2 * t8 * sigmabb / t1
+      #4 / t16))
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -1396,9 +1367,8 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+       zk(i) = -0.136284044462410474417D1 * rhoa * t10 / pi * (0.1804D1 -
+      # 0.804D0 / (0.1D1 + 0.209451650699150979027D-2 * t8 * sigmaaa / t1
+      #4 / t16))
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -1419,7 +1389,6 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+      #t16 / t18)) - 0.136284044462410474417D1 * rhob * t31 * t14 * (0.18
+      #04D1 - 0.804D0 / (0.1D1 + 0.209451650699150979027D-2 * t10 * sigma
+      #bb / t34 / t36))
+-
+                endif
+              endif
+            enddo
+@@ -1429,7 +1398,7 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -1476,14 +1445,13 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+      #31 / t32 / rhob)
+       vsigmacc(i) = vsigmacc(i) - 0.573752853339828035106D-3 / rhoa / t8
+      # * pi * t53 - 0.573752853339828035106D-3 / rhob / t27 * pi * t79
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -1503,7 +1471,6 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+      #2 / t14)) - 0.136284044462410474417D1 * rhob * t27 * t10 * (0.1804
+      #D1 - 0.804D0 / (0.1D1 + 0.209451650699150979027D-2 * t6 * sigmabb 
+      #/ t30 / t32))
+-
+              endif
+            enddo
+          endif
+@@ -1515,8 +1482,6 @@ c    Generated: Mon Jun 20 16:05:15 CEST 2016
+ c:PBEXsubrend
+ c:PW92Csubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:17 CEST 2016
+-
+       subroutine dftacg_pw92c
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -1524,7 +1489,8 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -1547,12 +1513,11 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t1 = 0.1D1 / pi
+       t2 = 0.1D1 / rho
+       t3 = t1 * t2
+@@ -1643,19 +1608,17 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+      #0.192366105093153631974D1 * t68 * t161 * t49 - 0.76946442037261452
+      #7896D1 * t69 * t45 * t167)
+       vrhoo(i) = vrhoo(i) + t95 - t105
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.1D1 / rho
+       t3 = 0.1D1 / pi * t2
+       t4 = t3 ** (0.1D1 / 0.3D1)
+@@ -1688,7 +1651,6 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+      #77332976287768525D0 * t4) * t31 * t43 * (0.1D1 - 0.1D1 * t49) + 0.
+      #192366105093153631974D1 * (-0.3109070D-1 * (0.1D1 + 0.186690969707
+      #574028554D0 * t4) * t65 + t20) * t43 * t49)
+-
+              endif
+            enddo
+          endif
+@@ -1697,7 +1659,7 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       t3 = 0.1D1 / pi
+@@ -1786,14 +1748,13 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+      #0735710958868637D1 * t128 - 0.344044309698575627326D0 * t132) / t6
+      #6 - t113 - t138) * t45 * t51 + 0.192366105093153631974D1 * t70 * t
+      #163 * t51 - 0.769464420372614527896D1 * t71 * t47 * t169)
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       t4 = 0.1D1 / rho
+@@ -1828,7 +1789,6 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+      #77332976287768525D0 * t6) * t33 * t45 * (0.1D1 - 0.1D1 * t51) + 0.
+      #192366105093153631974D1 * (-0.3109070D-1 * (0.1D1 + 0.186690969707
+      #574028554D0 * t6) * t67 + t22) * t45 * t51)
+-
+              endif
+            enddo
+          endif
+@@ -1840,8 +1800,6 @@ c    Generated: Mon Jun 20 16:05:17 CEST 2016
+ c:PW92Csubrend
+ c:SCANCsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:18 CEST 2016
+-
+       subroutine dftacg_scanc
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -1849,7 +1807,8 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -1872,13 +1831,12 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -2049,9 +2007,8 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      #* t346) * t110
+       vtauc(i) = vtauc(i) + t381
+       vtauo(i) = vtauo(i) - t381
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -2222,9 +2179,8 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      #* t346) * t110
+       vtauc(i) = vtauc(i) + t381
+       vtauo(i) = vtauo(i) + t381
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -2591,7 +2547,6 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      #420159300D30 * t356 * t820) * t180 * t181 - 0.28043741644866274100
+      #7D30 * t364 * t820) * t218
+       vtauo(i) = vtauo(i)
+-
+                endif
+              endif
+            enddo
+@@ -2599,13 +2554,12 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -2656,9 +2610,8 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+       zk(i) = rhob * (-t32 + t68 + (t92 * (0.500000000000000000000D0 + t
+      #96) - 0.7D0 * t105 * (0.500000000000000000000D0 - t96)) * (t32 - t
+      #68))
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -2709,9 +2662,8 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+       zk(i) = rhoa * (-t32 + t68 + (t92 * (0.500000000000000000000D0 + t
+      #96) - 0.7D0 * t105 * (0.500000000000000000000D0 - t96)) * (t32 - t
+      #68))
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -2811,7 +2763,6 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      #0.118155000000000000000D1 * t53 - 0.118155000000000000000D1 * t57)
+      # * (0.1D1 - 0.1D1 * t209 * t60 / t211 / t62) + t35 - t69 - t86 - t
+      #134))
+-
+                endif
+              endif
+            enddo
+@@ -2821,7 +2772,7 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -3179,14 +3130,13 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      # 0.7D0 * (0.120187464192284031860D1 * t339 * t811 - 0.600937320961
+      #420159300D30 * t348 * t811) * t172 * t173 - 0.28043741644866274100
+      #7D30 * t356 * t811) * t210
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -3283,7 +3233,6 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+      #0.118155000000000000000D1 * t45 - 0.118155000000000000000D1 * t49)
+      # * (0.1D1 - 0.1D1 * t201 * t52 / t203 / t54) + t27 - t61 - t78 - t
+      #126))
+-
+              endif
+            enddo
+          endif
+@@ -3295,8 +3244,6 @@ c    Generated: Mon Jun 20 16:05:18 CEST 2016
+ c:SCANCsubrend
+ c:SCANXsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:21 CEST 2016
+-
+       subroutine dftacg_scanx
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -3304,7 +3251,8 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -3327,13 +3275,12 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -3346,159 +3293,180 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       t15 = t14 ** (0.1D1 / 0.3D1)
+       t16 = rhob * t15
+       t17 = 0.1D1 / pi
+-      t18 = t15 ** 2
+-      t19 = 0.1D1 / t18
+-      t20 = sigmabb * t19
++      t18 = paramscanxmuak * sigmabb
++      t19 = t15 ** 2
++      t20 = 0.1D1 / t19
+       t21 = rhob ** 2
+       t22 = 0.1D1 / t21
+       t23 = t20 * t22
+-      t25 = exp(-0.747166092922644636268D-1 * t23)
+-      t26 = t22 * t25
+-      t29 = 0.1D1 + 0.747166092922644636268D-1 * t20 * t26
+-      t30 = t22 * t29
+-      t34 = 0.1D1 / rhob
+-      t37 = taub - 0.250000000000000000000D0 * sigmabb * t34
+-      t38 = t13 ** (0.1D1 / 0.3D1)
+-      t39 = t38 ** 2
+-      t40 = 0.1D1 / t39
+-      t41 = t37 * t40
+-      t42 = rhob ** (0.1D1 / 0.3D1)
+-      t43 = t42 ** 2
+-      t45 = 0.1D1 / t43 / rhob
+-      t46 = t41 * t45
+-      t48 = 0.1D1 - 0.504755720231149905248D0 * t46
+-      t49 = t48 ** 2
+-      t51 = exp(-0.5D0 * t49)
+-      t54 = 0.118591405585874358362D-1 * t23 + 0.120830459735945720683D0
+-     # * t48 * t51
++      t24 = paramscanxmuak ** 2
++      t25 = 0.1D1 / paramscanxk1
++      t26 = t24 * t25
++      t27 = t26 - 0.112654320987654320988D0
++      t28 = t27 * sigmabb
++      t29 = t28 * t20
++      t30 = 0.1D1 / paramscanxmuak
++      t31 = t22 * t30
++      t34 = abs(-0.1D1 * t26 + 0.112654320987654320988D0)
++      t35 = t34 * sigmabb
++      t39 = exp(-0.757133580346724857871D-1 * t35 * t23 * t30)
++      t40 = t31 * t39
++      t43 = 0.1D1 + 0.757133580346724857871D-1 * t29 * t40
++      t47 = sigmabb * t20
++      t50 = 0.1D1 / rhob
++      t53 = taub - 0.250000000000000000000D0 * sigmabb * t50
++      t54 = t13 ** (0.1D1 / 0.3D1)
+       t55 = t54 ** 2
+-      t57 = 0.1D1 + 0.143805048498903106908D0 * t20 * t30 + 0.1538461538
+-     #46153846154D2 * t55
+-      t59 = 0.65D-1 / t57
+-      t60 = 0.1D1 / t48
+-      t61 = t45 * t60
+-      t64 = tanh(0.504755720231149905248D30 * t41 * t61)
+-      t66 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t64
+-      t70 = exp(-0.336672065394176986800D0 * t41 * t61 * t66)
+-      t73 = tanh(0.1D31 - 0.504755720231149905248D30 * t46)
+-      t74 = 0.500000000000000000000D0 * t73
+-      t75 = 0.500000000000000000000D0 + t74
+-      t78 = tanh(0.1D31 * t60)
+-      t80 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t78
+-      t83 = exp(0.8D0 * t60 * t80)
+-      t84 = 0.500000000000000000000D0 - t74
+-      t87 = t70 * t75 - 0.124D1 * t83 * t84
+-      t88 = 0.109D0 + t59
+-      t90 = 0.1065D1 - t59 + t87 * t88
+-      t91 = t17 * t90
+-      t92 = sqrt(sigmabb)
+-      t94 = t92 / t15
+-      t95 = t94 * t34
+-      t96 = sqrt(t95)
+-      t99 = exp(-0.943252112663908494661D1 / t96)
+-      t101 = 0.1D1 - 0.1D1 * t99
+-      zk(i) = -0.136284044462410474417D1 * t16 * t91 * t101
+-      t109 = 0.681420222312052372084D0 * t15 * t17 * t90 * t101
+-      t114 = 0.227140074104017457361D0 * rhob * t19 * pi * t90 * t101
+-      t115 = t57 ** 2
+-      t116 = 0.1D1 / t115
+-      t119 = sigmabb / t18 / t14
+-      t123 = t21 * rhob
+-      t124 = 0.1D1 / t123
+-      t135 = t119 * t22 * t13
+-      t137 = t20 * t124
+-      t152 = sigmabb / t43 / t123
+-      t153 = t152 * t40
+-      t156 = 0.1D1 / t43 / t21
+-      t157 = t41 * t156
+-      t159 = -0.126188930057787476312D0 * t153 + 0.841259533718583175412
+-     #D0 * t157
+-      t168 = -0.958700323326020712721D-1 * t119 * t30 * t13 - 0.28761009
+-     #6997806213817D0 * t20 * t124 * t29 + 0.143805048498903106908D0 * t
+-     #20 * t22 * (-0.498110728615096424178D-1 * t119 * t26 * t13 - 0.149
+-     #433218584528927254D0 * t20 * t124 * t25 + 0.747166092922644636268D
+-     #-1 * t20 * t22 * (0.498110728615096424178D-1 * t135 + 0.1494332185
+-     #84528927254D0 * t137) * t25) + 0.307692307692307692308D2 * t54 * (
+-     #-0.790609370572495722413D-2 * t135 - 0.237182811171748716724D-1 * 
+-     #t137 + 0.120830459735945720683D0 * t159 * t51 - 0.1208304597359457
+-     #20683D0 * t49 * t159 * t51)
+-      t171 = t40 * t60
+-      t175 = t156 * t60
+-      t179 = 0.1D1 / t49
+-      t184 = t64 ** 2
+-      t187 = t60 * (0.1D1 - 0.1D1 * t184)
+-      t203 = t73 ** 2
+-      t205 = 0.1D1 - 0.1D1 * t203
+-      t206 = t70 * t205
+-      t209 = -0.126188930057787476312D30 * t153 + 0.84125953371858317541
+-     #2D30 * t157
+-      t212 = t179 * t80
+-      t217 = t78 ** 2
+-      t220 = 0.1D1 / t49 / t48 * (0.1D1 - 0.1D1 * t217)
+-      t227 = t83 * t205
+-      t232 = t87 * t116
+-      t239 = 0.681420222312052372084D0 * t16 * t17 * (0.65D-1 * t116 * t
+-     #168 + ((-0.841680163485442467001D-1 * t152 * t171 * t66 + 0.561120
+-     #108990294978001D0 * t41 * t175 * t66 + 0.336672065394176986800D0 *
+-     # t46 * t179 * t66 * t159 - 0.168336032697088493400D0 * t46 * t187 
+-     #* (0.126188930057787476312D30 * t152 * t171 - 0.841259533718583175
+-     #412D30 * t41 * t175 - 0.504755720231149905248D30 * t41 * t45 * t17
+-     #9 * t159)) * t70 * t75 + 0.500000000000000000000D0 * t206 * t209 -
+-     # 0.124D1 * (-0.8D0 * t212 * t159 + 0.400000000000000000000D30 * t2
+-     #20 * t159) * t83 * t84 + 0.620000000000000000000D0 * t227 * t209) 
+-     #* t88 - 0.65D-1 * t232 * t168) * t101
+-      t242 = 0.1D1 / t96 / t95
+-      t245 = 0.1D1 / t15 / t14
+-      t256 = 0.973296829181994948224D0 * t16 * t17 * t90 * t242 * (-0.11
+-     #0064241629820889462D1 * t92 * t245 * t34 * t13 - 0.330192724889462
+-     #668387D1 * t94 * t22) * t99
+-      vrhoc(i) = vrhoc(i) - t109 - t114 - t239 + t256
+-      vrhoo(i) = vrhoo(i) + t109 + t114 + t239 - t256
+-      t259 = t19 * t22
+-      t265 = t21 ** 2
+-      t275 = t156 * t40
+-      t285 = 0.143805048498903106908D0 * t259 * t29 + 0.1438050484989031
+-     #06908D0 * t20 * t22 * (0.747166092922644636268D-1 * t259 * t25 - 0
+-     #.558257170413290039222D-2 * sigmabb * t245 / t265 * t25) + 0.30769
+-     #2307692307692308D2 * t54 * (0.118591405585874358362D-1 * t259 + 0.
+-     #152474664324695603608D-1 * t275 * t51 - 0.152474664324695603608D-1
+-     # * t49 * t156 * t40 * t51)
+-      t288 = t60 * t66
+-      t293 = t37 / t38 / t13
+-      t296 = 0.1D1 / t42 / t265 * t179
+-      t330 = t16 * t17 * (0.65D-1 * t116 * t285 + ((0.841680163485442467
+-     #001D-1 * t275 * t288 + 0.424842877124366511988D-1 * t293 * t296 * 
+-     #t66 - 0.168336032697088493400D0 * t46 * t187 * (-0.126188930057787
+-     #476312D30 * t275 * t60 - 0.636945842765167184389D29 * t293 * t296)
+-     #) * t70 * t75 + 0.630944650288937381559D29 * t206 * t275 - 0.124D1
+-     # * (-0.100951144046229981050D0 * t212 * t275 + 0.50475572023114990
+-     #5248D29 * t220 * t275) * t83 * t84 + 0.782371366358282353132D29 * 
+-     #t227 * t275) * t88 - 0.65D-1 * t232 * t285) * t101
+-      t331 = 0.340710111156026186042D0 * t330
+-      t335 = t91 * t242 / t92 * t99
+-      t336 = 0.803438830384691996314D0 * t335
+-      vsigmacc(i) = vsigmacc(i) - t331 + t336
+-      vsigmaco(i) = vsigmaco(i) + 0.681420222312052372084D0 * t330 - 0.1
+-     #60687766076938399263D1 * t335
+-      vsigmaoo(i) = vsigmaoo(i) - t331 + t336
+-      t343 = t40 * t45
+-      t350 = -0.609898657298782414434D-1 * t343 * t51 + 0.60989865729878
+-     #2414434D-1 * t49 * t40 * t45 * t51
+-      t357 = 0.1D1 / t42 / t123 * t179
+-      t393 = 0.681420222312052372084D0 * t16 * t17 * (0.2000000000000000
+-     #00000D1 * t116 * t54 * t350 + ((-0.336672065394176986800D0 * t343 
+-     #* t288 - 0.169937150849746604795D0 * t293 * t357 * t66 - 0.1683360
+-     #32697088493400D0 * t46 * t187 * (0.504755720231149905248D30 * t343
+-     # * t60 + 0.254778337106066873756D30 * t293 * t357)) * t70 * t75 - 
+-     #0.252377860115574952624D30 * t206 * t343 - 0.124D1 * (0.4038045761
+-     #84919924197D0 * t212 * t343 - 0.201902288092459962099D30 * t220 * 
+-     #t343) * t83 * t84 - 0.312948546543312941253D30 * t227 * t343) * t8
+-     #8 - 0.200000000000000000000D1 * t232 * t54 * t350) * t101
+-      vtauc(i) = vtauc(i) - t393
+-      vtauo(i) = vtauo(i) + t393
+-
++      t56 = 0.1D1 / t55
++      t57 = t53 * t56
++      t58 = rhob ** (0.1D1 / 0.3D1)
++      t59 = t58 ** 2
++      t61 = 0.1D1 / t59 / rhob
++      t62 = t57 * t61
++      t64 = 0.1D1 - 0.504755720231149905248D0 * t62
++      t65 = t64 ** 2
++      t67 = exp(-0.5D0 * t65)
++      t70 = 0.118591405585874358362D-1 * t47 * t22 + 0.12083045973594572
++     #0683D0 * t64 * t67
++      t71 = t70 ** 2
++      t74 = 0.1D1 + (0.757133580346724857871D-1 * t18 * t23 * t43 + t71)
++     # * t25
++      t76 = paramscanxk1 / t74
++      t78 = paramscanxc1x * t53
++      t79 = t78 * t56
++      t80 = 0.1D1 / t64
++      t81 = t61 * t80
++      t84 = tanh(0.504755720231149905248D30 * t57 * t81)
++      t86 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t84
++      t87 = t81 * t86
++      t90 = exp(-0.504755720231149905248D0 * t79 * t87)
++      t93 = tanh(0.1D31 - 0.504755720231149905248D30 * t62)
++      t94 = 0.500000000000000000000D0 * t93
++      t95 = 0.500000000000000000000D0 + t94
++      t99 = tanh(0.1D31 * t80)
++      t101 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t99
++      t103 = exp(paramscanxc2x * t80 * t101)
++      t104 = paramscanxdx * t103
++      t105 = 0.500000000000000000000D0 - t94
++      t108 = t90 * t95 - 0.1D1 * t104 * t105
++      t110 = paramscanxhx0 - 0.1D1 - 0.1D1 * paramscanxk1 + t76
++      t112 = 0.1D1 + paramscanxk1 - 0.1D1 * t76 + t108 * t110
++      t113 = t17 * t112
++      t114 = sqrt(sigmabb)
++      t116 = t114 / t15
++      t117 = t116 * t50
++      t118 = sqrt(t117)
++      t122 = exp(-0.190636858599387314752D1 * paramscanxa1 / t118)
++      t124 = 0.1D1 - 0.1D1 * t122
++      zk(i) = -0.136284044462410474417D1 * t16 * t113 * t124
++      t132 = 0.681420222312052372084D0 * t15 * t17 * t112 * t124
++      t137 = 0.227140074104017457361D0 * rhob * t20 * pi * t112 * t124
++      t138 = t74 ** 2
++      t139 = 0.1D1 / t138
++      t141 = 0.1D1 / t19 / t14
++      t143 = t22 * t43
++      t147 = t21 * rhob
++      t148 = 0.1D1 / t147
++      t149 = t20 * t148
++      t185 = 0.1D1 / t59 / t147
++      t186 = sigmabb * t185
++      t187 = t186 * t56
++      t190 = 0.1D1 / t59 / t21
++      t191 = t57 * t190
++      t193 = -0.126188930057787476312D0 * t187 + 0.841259533718583175412
++     #D0 * t191
++      t202 = -0.504755720231149905248D-1 * t18 * t141 * t143 * t13 - 0.1
++     #51426716069344971574D0 * t18 * t149 * t43 + 0.75713358034672485787
++     #1D-1 * t18 * t23 * (-0.504755720231149905248D-1 * t28 * t141 * t31
++     # * t39 * t13 - 0.151426716069344971574D0 * t29 * t148 * t30 * t39 
++     #+ 0.757133580346724857871D-1 * t29 * t31 * (0.50475572023114990524
++     #8D-1 * t35 * t141 * t31 * t13 + 0.151426716069344971574D0 * t35 * 
++     #t149 * t30) * t39) + 0.2D1 * t70 * (-0.790609370572495722413D-2 * 
++     #sigmabb * t141 * t22 * t13 - 0.237182811171748716724D-1 * t47 * t1
++     #48 + 0.120830459735945720683D0 * t193 * t67 - 0.120830459735945720
++     #683D0 * t65 * t193 * t67)
++      t206 = t56 * t80
++      t207 = t206 * t86
++      t210 = t190 * t80
++      t214 = 0.1D1 / t65
++      t215 = t61 * t214
++      t220 = t84 ** 2
++      t222 = 0.1D1 - 0.1D1 * t220
++      t238 = t93 ** 2
++      t240 = 0.1D1 - 0.1D1 * t238
++      t241 = t90 * t240
++      t244 = -0.126188930057787476312D30 * t187 + 0.84125953371858317541
++     #2D30 * t191
++      t247 = paramscanxc2x * t214
++      t253 = paramscanxc2x / t65 / t64
++      t254 = t99 ** 2
++      t256 = 0.1D1 - 0.1D1 * t254
++      t262 = t103 * t105
++      t270 = t108 * t139
++      t277 = 0.681420222312052372084D0 * t16 * t17 * (t139 * t202 + ((-0
++     #.126188930057787476312D0 * paramscanxc1x * sigmabb * t185 * t207 +
++     # 0.841259533718583175412D0 * t79 * t210 * t86 + 0.5047557202311499
++     #05248D0 * t79 * t215 * t86 * t193 - 0.252377860115574952624D0 * t7
++     #9 * t81 * t222 * (0.126188930057787476312D30 * t186 * t206 - 0.841
++     #259533718583175412D30 * t57 * t210 - 0.504755720231149905248D30 * 
++     #t57 * t215 * t193)) * t90 * t95 + 0.500000000000000000000D0 * t241
++     # * t244 - 0.1D1 * paramscanxdx * (-0.1D1 * t247 * t101 * t193 + 0.
++     #500000000000000000000D30 * t253 * t256 * t193) * t262 + 0.50000000
++     #0000000000000D0 * t104 * t240 * t244) * t110 - 0.1D1 * t270 * t202
++     #) * t124
++      t280 = 0.1D1 / t118 / t117
++      t283 = 0.1D1 / t15 / t14
++      t294 = 0.196709074391559034787D0 * t16 * t113 * paramscanxa1 * t28
++     #0 * (-0.110064241629820889462D1 * t114 * t283 * t50 * t13 - 0.3301
++     #92724889462668387D1 * t116 * t22) * t122
++      vrhoc(i) = vrhoc(i) - t132 - t137 - t277 + t294
++      vrhoo(i) = vrhoo(i) + t132 + t137 + t277 - t294
++      t304 = t21 ** 2
++      t317 = t190 * t56
++      t327 = 0.757133580346724857871D-1 * paramscanxmuak * t20 * t143 + 
++     #0.757133580346724857871D-1 * t18 * t23 * (0.757133580346724857871D
++     #-1 * t27 * t20 * t40 - 0.573251258488650465949D-2 * t28 * t283 / t
++     #304 / t24 * t34 * t39) + 0.2D1 * t70 * (0.118591405585874358362D-1
++     # * t23 + 0.152474664324695603608D-1 * t317 * t67 - 0.1524746643246
++     #95603608D-1 * t65 * t190 * t56 * t67)
++      t333 = 0.1D1 / t54 / t13
++      t334 = t78 * t333
++      t337 = 0.1D1 / t58 / t304 * t214
++      t343 = t53 * t333
++      t379 = t16 * t17 * (t139 * t327 + ((0.126188930057787476312D0 * pa
++     #ramscanxc1x * t190 * t207 + 0.636945842765167184389D-1 * t334 * t3
++     #37 * t86 - 0.252377860115574952624D0 * t79 * t81 * t222 * (-0.1261
++     #88930057787476312D30 * t317 * t80 - 0.636945842765167184389D29 * t
++     #343 * t337)) * t90 * t95 + 0.630944650288937381559D29 * t241 * t31
++     #7 - 0.1D1 * paramscanxdx * (-0.126188930057787476312D0 * t247 * t1
++     #01 * t190 * t56 + 0.630944650288937381559D29 * t253 * t256 * t190 
++     #* t56) * t262 + 0.630944650288937381559D29 * t104 * t240 * t190 * 
++     #t56) * t110 - 0.1D1 * t270 * t327) * t124
++      t380 = 0.340710111156026186042D0 * t379
++      t385 = t113 * paramscanxa1 * t280 / t114 * t122
++      t386 = 0.162379763209582246269D0 * t385
++      vsigmacc(i) = vsigmacc(i) - t380 + t386
++      vsigmaco(i) = vsigmaco(i) + 0.681420222312052372084D0 * t379 - 0.3
++     #24759526419164492538D0 * t385
++      vsigmaoo(i) = vsigmaoo(i) - t380 + t386
++      t393 = t56 * t61
++      t400 = -0.609898657298782414434D-1 * t393 * t67 + 0.60989865729878
++     #2414434D-1 * t65 * t56 * t61 * t67
++      t408 = 0.1D1 / t58 / t147 * t214
++      t451 = 0.681420222312052372084D0 * t16 * t17 * (0.2D1 * t139 * t70
++     # * t400 + ((-0.504755720231149905248D0 * paramscanxc1x * t56 * t87
++     # - 0.254778337106066873756D0 * t334 * t408 * t86 - 0.2523778601155
++     #74952624D0 * t79 * t81 * t222 * (0.504755720231149905248D30 * t393
++     # * t80 + 0.254778337106066873756D30 * t343 * t408)) * t90 * t95 - 
++     #0.252377860115574952624D30 * t241 * t393 - 0.1D1 * paramscanxdx * 
++     #(0.504755720231149905248D0 * t247 * t101 * t56 * t61 - 0.252377860
++     #115574952624D30 * t253 * t256 * t56 * t61) * t262 - 0.252377860115
++     #574952624D30 * t104 * t240 * t56 * t61) * t110 - 0.2D1 * t270 * t7
++     #0 * t400) * t124
++      vtauc(i) = vtauc(i) - t451
++      vtauo(i) = vtauo(i) + t451
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -3511,159 +3479,180 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       t15 = t14 ** (0.1D1 / 0.3D1)
+       t16 = rhoa * t15
+       t17 = 0.1D1 / pi
+-      t18 = t15 ** 2
+-      t19 = 0.1D1 / t18
+-      t20 = sigmaaa * t19
++      t18 = paramscanxmuak * sigmaaa
++      t19 = t15 ** 2
++      t20 = 0.1D1 / t19
+       t21 = rhoa ** 2
+       t22 = 0.1D1 / t21
+       t23 = t20 * t22
+-      t25 = exp(-0.747166092922644636268D-1 * t23)
+-      t26 = t22 * t25
+-      t29 = 0.1D1 + 0.747166092922644636268D-1 * t20 * t26
+-      t30 = t22 * t29
+-      t34 = 0.1D1 / rhoa
+-      t37 = taua - 0.250000000000000000000D0 * sigmaaa * t34
+-      t38 = t13 ** (0.1D1 / 0.3D1)
+-      t39 = t38 ** 2
+-      t40 = 0.1D1 / t39
+-      t41 = t37 * t40
+-      t42 = rhoa ** (0.1D1 / 0.3D1)
+-      t43 = t42 ** 2
+-      t45 = 0.1D1 / t43 / rhoa
+-      t46 = t41 * t45
+-      t48 = 0.1D1 - 0.504755720231149905248D0 * t46
+-      t49 = t48 ** 2
+-      t51 = exp(-0.5D0 * t49)
+-      t54 = 0.118591405585874358362D-1 * t23 + 0.120830459735945720683D0
+-     # * t48 * t51
++      t24 = paramscanxmuak ** 2
++      t25 = 0.1D1 / paramscanxk1
++      t26 = t24 * t25
++      t27 = t26 - 0.112654320987654320988D0
++      t28 = t27 * sigmaaa
++      t29 = t28 * t20
++      t30 = 0.1D1 / paramscanxmuak
++      t31 = t22 * t30
++      t34 = abs(-0.1D1 * t26 + 0.112654320987654320988D0)
++      t35 = t34 * sigmaaa
++      t39 = exp(-0.757133580346724857871D-1 * t35 * t23 * t30)
++      t40 = t31 * t39
++      t43 = 0.1D1 + 0.757133580346724857871D-1 * t29 * t40
++      t47 = sigmaaa * t20
++      t50 = 0.1D1 / rhoa
++      t53 = taua - 0.250000000000000000000D0 * sigmaaa * t50
++      t54 = t13 ** (0.1D1 / 0.3D1)
+       t55 = t54 ** 2
+-      t57 = 0.1D1 + 0.143805048498903106908D0 * t20 * t30 + 0.1538461538
+-     #46153846154D2 * t55
+-      t59 = 0.65D-1 / t57
+-      t60 = 0.1D1 / t48
+-      t61 = t45 * t60
+-      t64 = tanh(0.504755720231149905248D30 * t41 * t61)
+-      t66 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t64
+-      t70 = exp(-0.336672065394176986800D0 * t41 * t61 * t66)
+-      t73 = tanh(0.1D31 - 0.504755720231149905248D30 * t46)
+-      t74 = 0.500000000000000000000D0 * t73
+-      t75 = 0.500000000000000000000D0 + t74
+-      t78 = tanh(0.1D31 * t60)
+-      t80 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t78
+-      t83 = exp(0.8D0 * t60 * t80)
+-      t84 = 0.500000000000000000000D0 - t74
+-      t87 = t70 * t75 - 0.124D1 * t83 * t84
+-      t88 = 0.109D0 + t59
+-      t90 = 0.1065D1 - t59 + t87 * t88
+-      t91 = t17 * t90
+-      t92 = sqrt(sigmaaa)
+-      t94 = t92 / t15
+-      t95 = t94 * t34
+-      t96 = sqrt(t95)
+-      t99 = exp(-0.943252112663908494661D1 / t96)
+-      t101 = 0.1D1 - 0.1D1 * t99
+-      zk(i) = -0.136284044462410474417D1 * t16 * t91 * t101
+-      t109 = 0.681420222312052372084D0 * t15 * t17 * t90 * t101
+-      t114 = 0.227140074104017457361D0 * rhoa * t19 * pi * t90 * t101
+-      t115 = t57 ** 2
+-      t116 = 0.1D1 / t115
+-      t119 = sigmaaa / t18 / t14
+-      t123 = t21 * rhoa
+-      t124 = 0.1D1 / t123
+-      t135 = t119 * t22 * t13
+-      t137 = t20 * t124
+-      t152 = sigmaaa / t43 / t123
+-      t153 = t152 * t40
+-      t156 = 0.1D1 / t43 / t21
+-      t157 = t41 * t156
+-      t159 = -0.126188930057787476312D0 * t153 + 0.841259533718583175412
+-     #D0 * t157
+-      t168 = -0.958700323326020712721D-1 * t119 * t30 * t13 - 0.28761009
+-     #6997806213817D0 * t20 * t124 * t29 + 0.143805048498903106908D0 * t
+-     #20 * t22 * (-0.498110728615096424178D-1 * t119 * t26 * t13 - 0.149
+-     #433218584528927254D0 * t20 * t124 * t25 + 0.747166092922644636268D
+-     #-1 * t20 * t22 * (0.498110728615096424178D-1 * t135 + 0.1494332185
+-     #84528927254D0 * t137) * t25) + 0.307692307692307692308D2 * t54 * (
+-     #-0.790609370572495722413D-2 * t135 - 0.237182811171748716724D-1 * 
+-     #t137 + 0.120830459735945720683D0 * t159 * t51 - 0.1208304597359457
+-     #20683D0 * t49 * t159 * t51)
+-      t171 = t40 * t60
+-      t175 = t156 * t60
+-      t179 = 0.1D1 / t49
+-      t184 = t64 ** 2
+-      t187 = t60 * (0.1D1 - 0.1D1 * t184)
+-      t203 = t73 ** 2
+-      t205 = 0.1D1 - 0.1D1 * t203
+-      t206 = t70 * t205
+-      t209 = -0.126188930057787476312D30 * t153 + 0.84125953371858317541
+-     #2D30 * t157
+-      t212 = t179 * t80
+-      t217 = t78 ** 2
+-      t220 = 0.1D1 / t49 / t48 * (0.1D1 - 0.1D1 * t217)
+-      t227 = t83 * t205
+-      t232 = t87 * t116
+-      t239 = 0.681420222312052372084D0 * t16 * t17 * (0.65D-1 * t116 * t
+-     #168 + ((-0.841680163485442467001D-1 * t152 * t171 * t66 + 0.561120
+-     #108990294978001D0 * t41 * t175 * t66 + 0.336672065394176986800D0 *
+-     # t46 * t179 * t66 * t159 - 0.168336032697088493400D0 * t46 * t187 
+-     #* (0.126188930057787476312D30 * t152 * t171 - 0.841259533718583175
+-     #412D30 * t41 * t175 - 0.504755720231149905248D30 * t41 * t45 * t17
+-     #9 * t159)) * t70 * t75 + 0.500000000000000000000D0 * t206 * t209 -
+-     # 0.124D1 * (-0.8D0 * t212 * t159 + 0.400000000000000000000D30 * t2
+-     #20 * t159) * t83 * t84 + 0.620000000000000000000D0 * t227 * t209) 
+-     #* t88 - 0.65D-1 * t232 * t168) * t101
+-      t242 = 0.1D1 / t96 / t95
+-      t245 = 0.1D1 / t15 / t14
+-      t256 = 0.973296829181994948224D0 * t16 * t17 * t90 * t242 * (-0.11
+-     #0064241629820889462D1 * t92 * t245 * t34 * t13 - 0.330192724889462
+-     #668387D1 * t94 * t22) * t99
+-      vrhoc(i) = vrhoc(i) - t109 - t114 - t239 + t256
+-      vrhoo(i) = vrhoo(i) - t109 - t114 - t239 + t256
+-      t259 = t19 * t22
+-      t265 = t21 ** 2
+-      t275 = t156 * t40
+-      t285 = 0.143805048498903106908D0 * t259 * t29 + 0.1438050484989031
+-     #06908D0 * t20 * t22 * (0.747166092922644636268D-1 * t259 * t25 - 0
+-     #.558257170413290039222D-2 * sigmaaa * t245 / t265 * t25) + 0.30769
+-     #2307692307692308D2 * t54 * (0.118591405585874358362D-1 * t259 + 0.
+-     #152474664324695603608D-1 * t275 * t51 - 0.152474664324695603608D-1
+-     # * t49 * t156 * t40 * t51)
+-      t288 = t60 * t66
+-      t293 = t37 / t38 / t13
+-      t296 = 0.1D1 / t42 / t265 * t179
+-      t330 = t16 * t17 * (0.65D-1 * t116 * t285 + ((0.841680163485442467
+-     #001D-1 * t275 * t288 + 0.424842877124366511988D-1 * t293 * t296 * 
+-     #t66 - 0.168336032697088493400D0 * t46 * t187 * (-0.126188930057787
+-     #476312D30 * t275 * t60 - 0.636945842765167184389D29 * t293 * t296)
+-     #) * t70 * t75 + 0.630944650288937381559D29 * t206 * t275 - 0.124D1
+-     # * (-0.100951144046229981050D0 * t212 * t275 + 0.50475572023114990
+-     #5248D29 * t220 * t275) * t83 * t84 + 0.782371366358282353132D29 * 
+-     #t227 * t275) * t88 - 0.65D-1 * t232 * t285) * t101
+-      t331 = 0.340710111156026186042D0 * t330
+-      t335 = t91 * t242 / t92 * t99
+-      t336 = 0.803438830384691996314D0 * t335
+-      vsigmacc(i) = vsigmacc(i) - t331 + t336
+-      vsigmaco(i) = vsigmaco(i) - 0.681420222312052372084D0 * t330 + 0.1
+-     #60687766076938399263D1 * t335
+-      vsigmaoo(i) = vsigmaoo(i) - t331 + t336
+-      t343 = t40 * t45
+-      t350 = -0.609898657298782414434D-1 * t343 * t51 + 0.60989865729878
+-     #2414434D-1 * t49 * t40 * t45 * t51
+-      t357 = 0.1D1 / t42 / t123 * t179
+-      t393 = 0.681420222312052372084D0 * t16 * t17 * (0.2000000000000000
+-     #00000D1 * t116 * t54 * t350 + ((-0.336672065394176986800D0 * t343 
+-     #* t288 - 0.169937150849746604795D0 * t293 * t357 * t66 - 0.1683360
+-     #32697088493400D0 * t46 * t187 * (0.504755720231149905248D30 * t343
+-     # * t60 + 0.254778337106066873756D30 * t293 * t357)) * t70 * t75 - 
+-     #0.252377860115574952624D30 * t206 * t343 - 0.124D1 * (0.4038045761
+-     #84919924197D0 * t212 * t343 - 0.201902288092459962099D30 * t220 * 
+-     #t343) * t83 * t84 - 0.312948546543312941253D30 * t227 * t343) * t8
+-     #8 - 0.200000000000000000000D1 * t232 * t54 * t350) * t101
+-      vtauc(i) = vtauc(i) - t393
+-      vtauo(i) = vtauo(i) - t393
+-
++      t56 = 0.1D1 / t55
++      t57 = t53 * t56
++      t58 = rhoa ** (0.1D1 / 0.3D1)
++      t59 = t58 ** 2
++      t61 = 0.1D1 / t59 / rhoa
++      t62 = t57 * t61
++      t64 = 0.1D1 - 0.504755720231149905248D0 * t62
++      t65 = t64 ** 2
++      t67 = exp(-0.5D0 * t65)
++      t70 = 0.118591405585874358362D-1 * t47 * t22 + 0.12083045973594572
++     #0683D0 * t64 * t67
++      t71 = t70 ** 2
++      t74 = 0.1D1 + (0.757133580346724857871D-1 * t18 * t23 * t43 + t71)
++     # * t25
++      t76 = paramscanxk1 / t74
++      t78 = paramscanxc1x * t53
++      t79 = t78 * t56
++      t80 = 0.1D1 / t64
++      t81 = t61 * t80
++      t84 = tanh(0.504755720231149905248D30 * t57 * t81)
++      t86 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t84
++      t87 = t81 * t86
++      t90 = exp(-0.504755720231149905248D0 * t79 * t87)
++      t93 = tanh(0.1D31 - 0.504755720231149905248D30 * t62)
++      t94 = 0.500000000000000000000D0 * t93
++      t95 = 0.500000000000000000000D0 + t94
++      t99 = tanh(0.1D31 * t80)
++      t101 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t99
++      t103 = exp(paramscanxc2x * t80 * t101)
++      t104 = paramscanxdx * t103
++      t105 = 0.500000000000000000000D0 - t94
++      t108 = t90 * t95 - 0.1D1 * t104 * t105
++      t110 = paramscanxhx0 - 0.1D1 - 0.1D1 * paramscanxk1 + t76
++      t112 = 0.1D1 + paramscanxk1 - 0.1D1 * t76 + t108 * t110
++      t113 = t17 * t112
++      t114 = sqrt(sigmaaa)
++      t116 = t114 / t15
++      t117 = t116 * t50
++      t118 = sqrt(t117)
++      t122 = exp(-0.190636858599387314752D1 * paramscanxa1 / t118)
++      t124 = 0.1D1 - 0.1D1 * t122
++      zk(i) = -0.136284044462410474417D1 * t16 * t113 * t124
++      t132 = 0.681420222312052372084D0 * t15 * t17 * t112 * t124
++      t137 = 0.227140074104017457361D0 * rhoa * t20 * pi * t112 * t124
++      t138 = t74 ** 2
++      t139 = 0.1D1 / t138
++      t141 = 0.1D1 / t19 / t14
++      t143 = t22 * t43
++      t147 = t21 * rhoa
++      t148 = 0.1D1 / t147
++      t149 = t20 * t148
++      t185 = 0.1D1 / t59 / t147
++      t186 = sigmaaa * t185
++      t187 = t186 * t56
++      t190 = 0.1D1 / t59 / t21
++      t191 = t57 * t190
++      t193 = -0.126188930057787476312D0 * t187 + 0.841259533718583175412
++     #D0 * t191
++      t202 = -0.504755720231149905248D-1 * t18 * t141 * t143 * t13 - 0.1
++     #51426716069344971574D0 * t18 * t149 * t43 + 0.75713358034672485787
++     #1D-1 * t18 * t23 * (-0.504755720231149905248D-1 * t28 * t141 * t31
++     # * t39 * t13 - 0.151426716069344971574D0 * t29 * t148 * t30 * t39 
++     #+ 0.757133580346724857871D-1 * t29 * t31 * (0.50475572023114990524
++     #8D-1 * t35 * t141 * t31 * t13 + 0.151426716069344971574D0 * t35 * 
++     #t149 * t30) * t39) + 0.2D1 * t70 * (-0.790609370572495722413D-2 * 
++     #sigmaaa * t141 * t22 * t13 - 0.237182811171748716724D-1 * t47 * t1
++     #48 + 0.120830459735945720683D0 * t193 * t67 - 0.120830459735945720
++     #683D0 * t65 * t193 * t67)
++      t206 = t56 * t80
++      t207 = t206 * t86
++      t210 = t190 * t80
++      t214 = 0.1D1 / t65
++      t215 = t61 * t214
++      t220 = t84 ** 2
++      t222 = 0.1D1 - 0.1D1 * t220
++      t238 = t93 ** 2
++      t240 = 0.1D1 - 0.1D1 * t238
++      t241 = t90 * t240
++      t244 = -0.126188930057787476312D30 * t187 + 0.84125953371858317541
++     #2D30 * t191
++      t247 = paramscanxc2x * t214
++      t253 = paramscanxc2x / t65 / t64
++      t254 = t99 ** 2
++      t256 = 0.1D1 - 0.1D1 * t254
++      t262 = t103 * t105
++      t270 = t108 * t139
++      t277 = 0.681420222312052372084D0 * t16 * t17 * (t139 * t202 + ((-0
++     #.126188930057787476312D0 * paramscanxc1x * sigmaaa * t185 * t207 +
++     # 0.841259533718583175412D0 * t79 * t210 * t86 + 0.5047557202311499
++     #05248D0 * t79 * t215 * t86 * t193 - 0.252377860115574952624D0 * t7
++     #9 * t81 * t222 * (0.126188930057787476312D30 * t186 * t206 - 0.841
++     #259533718583175412D30 * t57 * t210 - 0.504755720231149905248D30 * 
++     #t57 * t215 * t193)) * t90 * t95 + 0.500000000000000000000D0 * t241
++     # * t244 - 0.1D1 * paramscanxdx * (-0.1D1 * t247 * t101 * t193 + 0.
++     #500000000000000000000D30 * t253 * t256 * t193) * t262 + 0.50000000
++     #0000000000000D0 * t104 * t240 * t244) * t110 - 0.1D1 * t270 * t202
++     #) * t124
++      t280 = 0.1D1 / t118 / t117
++      t283 = 0.1D1 / t15 / t14
++      t294 = 0.196709074391559034787D0 * t16 * t113 * paramscanxa1 * t28
++     #0 * (-0.110064241629820889462D1 * t114 * t283 * t50 * t13 - 0.3301
++     #92724889462668387D1 * t116 * t22) * t122
++      vrhoc(i) = vrhoc(i) - t132 - t137 - t277 + t294
++      vrhoo(i) = vrhoo(i) - t132 - t137 - t277 + t294
++      t304 = t21 ** 2
++      t317 = t190 * t56
++      t327 = 0.757133580346724857871D-1 * paramscanxmuak * t20 * t143 + 
++     #0.757133580346724857871D-1 * t18 * t23 * (0.757133580346724857871D
++     #-1 * t27 * t20 * t40 - 0.573251258488650465949D-2 * t28 * t283 / t
++     #304 / t24 * t34 * t39) + 0.2D1 * t70 * (0.118591405585874358362D-1
++     # * t23 + 0.152474664324695603608D-1 * t317 * t67 - 0.1524746643246
++     #95603608D-1 * t65 * t190 * t56 * t67)
++      t333 = 0.1D1 / t54 / t13
++      t334 = t78 * t333
++      t337 = 0.1D1 / t58 / t304 * t214
++      t343 = t53 * t333
++      t379 = t16 * t17 * (t139 * t327 + ((0.126188930057787476312D0 * pa
++     #ramscanxc1x * t190 * t207 + 0.636945842765167184389D-1 * t334 * t3
++     #37 * t86 - 0.252377860115574952624D0 * t79 * t81 * t222 * (-0.1261
++     #88930057787476312D30 * t317 * t80 - 0.636945842765167184389D29 * t
++     #343 * t337)) * t90 * t95 + 0.630944650288937381559D29 * t241 * t31
++     #7 - 0.1D1 * paramscanxdx * (-0.126188930057787476312D0 * t247 * t1
++     #01 * t190 * t56 + 0.630944650288937381559D29 * t253 * t256 * t190 
++     #* t56) * t262 + 0.630944650288937381559D29 * t104 * t240 * t190 * 
++     #t56) * t110 - 0.1D1 * t270 * t327) * t124
++      t380 = 0.340710111156026186042D0 * t379
++      t385 = t113 * paramscanxa1 * t280 / t114 * t122
++      t386 = 0.162379763209582246269D0 * t385
++      vsigmacc(i) = vsigmacc(i) - t380 + t386
++      vsigmaco(i) = vsigmaco(i) - 0.681420222312052372084D0 * t379 + 0.3
++     #24759526419164492538D0 * t385
++      vsigmaoo(i) = vsigmaoo(i) - t380 + t386
++      t393 = t56 * t61
++      t400 = -0.609898657298782414434D-1 * t393 * t67 + 0.60989865729878
++     #2414434D-1 * t65 * t56 * t61 * t67
++      t408 = 0.1D1 / t58 / t147 * t214
++      t451 = 0.681420222312052372084D0 * t16 * t17 * (0.2D1 * t139 * t70
++     # * t400 + ((-0.504755720231149905248D0 * paramscanxc1x * t56 * t87
++     # - 0.254778337106066873756D0 * t334 * t408 * t86 - 0.2523778601155
++     #74952624D0 * t79 * t81 * t222 * (0.504755720231149905248D30 * t393
++     # * t80 + 0.254778337106066873756D30 * t343 * t408)) * t90 * t95 - 
++     #0.252377860115574952624D30 * t241 * t393 - 0.1D1 * paramscanxdx * 
++     #(0.504755720231149905248D0 * t247 * t101 * t56 * t61 - 0.252377860
++     #115574952624D30 * t253 * t256 * t56 * t61) * t262 - 0.252377860115
++     #574952624D30 * t104 * t240 * t56 * t61) * t110 - 0.2D1 * t270 * t7
++     #0 * t400) * t124
++      vtauc(i) = vtauc(i) - t451
++      vtauo(i) = vtauo(i) - t451
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -3681,306 +3670,344 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       t18 = t17 ** (0.1D1 / 0.3D1)
+       t19 = rhoa * t18
+       t20 = 0.1D1 / pi
+-      t21 = t18 ** 2
+-      t22 = 0.1D1 / t21
+-      t23 = sigmaaa * t22
++      t21 = paramscanxmuak * sigmaaa
++      t22 = t18 ** 2
++      t23 = 0.1D1 / t22
+       t24 = rhoa ** 2
+       t25 = 0.1D1 / t24
+       t26 = t23 * t25
+-      t28 = exp(-0.747166092922644636268D-1 * t26)
+-      t29 = t25 * t28
+-      t32 = 0.1D1 + 0.747166092922644636268D-1 * t23 * t29
+-      t33 = t25 * t32
+-      t37 = 0.1D1 / rhoa
+-      t40 = taua - 0.250000000000000000000D0 * sigmaaa * t37
+-      t41 = t16 ** (0.1D1 / 0.3D1)
+-      t42 = t41 ** 2
+-      t43 = 0.1D1 / t42
+-      t44 = t40 * t43
+-      t45 = rhoa ** (0.1D1 / 0.3D1)
+-      t46 = t45 ** 2
+-      t48 = 0.1D1 / t46 / rhoa
+-      t49 = t44 * t48
+-      t51 = 0.1D1 - 0.504755720231149905248D0 * t49
+-      t52 = t51 ** 2
+-      t54 = exp(-0.5D0 * t52)
+-      t57 = 0.118591405585874358362D-1 * t26 + 0.120830459735945720683D0
+-     # * t51 * t54
++      t27 = paramscanxmuak ** 2
++      t28 = 0.1D1 / paramscanxk1
++      t29 = t27 * t28
++      t30 = t29 - 0.112654320987654320988D0
++      t31 = t30 * sigmaaa
++      t32 = t31 * t23
++      t33 = 0.1D1 / paramscanxmuak
++      t34 = t25 * t33
++      t37 = abs(-0.1D1 * t29 + 0.112654320987654320988D0)
++      t38 = t37 * sigmaaa
++      t42 = exp(-0.757133580346724857871D-1 * t38 * t26 * t33)
++      t43 = t34 * t42
++      t46 = 0.1D1 + 0.757133580346724857871D-1 * t32 * t43
++      t50 = sigmaaa * t23
++      t53 = 0.1D1 / rhoa
++      t56 = taua - 0.250000000000000000000D0 * sigmaaa * t53
++      t57 = t16 ** (0.1D1 / 0.3D1)
+       t58 = t57 ** 2
+-      t60 = 0.1D1 + 0.143805048498903106908D0 * t23 * t33 + 0.1538461538
+-     #46153846154D2 * t58
+-      t62 = 0.65D-1 / t60
+-      t63 = 0.1D1 / t51
+-      t64 = t48 * t63
+-      t67 = tanh(0.504755720231149905248D30 * t44 * t64)
+-      t69 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t67
+-      t73 = exp(-0.336672065394176986800D0 * t44 * t64 * t69)
+-      t76 = tanh(0.1D31 - 0.504755720231149905248D30 * t49)
+-      t77 = 0.500000000000000000000D0 * t76
+-      t78 = 0.500000000000000000000D0 + t77
+-      t81 = tanh(0.1D31 * t63)
+-      t83 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t81
+-      t86 = exp(0.8D0 * t63 * t83)
+-      t87 = 0.500000000000000000000D0 - t77
+-      t90 = t73 * t78 - 0.124D1 * t86 * t87
+-      t91 = 0.109D0 + t62
+-      t93 = 0.1065D1 - t62 + t90 * t91
+-      t94 = t20 * t93
+-      t95 = sqrt(sigmaaa)
+-      t97 = t95 / t18
+-      t98 = t97 * t37
+-      t99 = sqrt(t98)
+-      t102 = exp(-0.943252112663908494661D1 / t99)
+-      t104 = 0.1D1 - 0.1D1 * t102
+-      t108 = t16 * rhob
+-      t109 = t108 ** (0.1D1 / 0.3D1)
+-      t110 = rhob * t109
+-      t111 = t109 ** 2
+-      t112 = 0.1D1 / t111
+-      t113 = sigmabb * t112
+-      t114 = rhob ** 2
+-      t115 = 0.1D1 / t114
+-      t116 = t113 * t115
+-      t118 = exp(-0.747166092922644636268D-1 * t116)
+-      t119 = t115 * t118
+-      t122 = 0.1D1 + 0.747166092922644636268D-1 * t113 * t119
+-      t123 = t115 * t122
+-      t127 = 0.1D1 / rhob
+-      t130 = taub - 0.250000000000000000000D0 * sigmabb * t127
+-      t131 = t130 * t43
+-      t132 = rhob ** (0.1D1 / 0.3D1)
+-      t133 = t132 ** 2
+-      t135 = 0.1D1 / t133 / rhob
+-      t136 = t131 * t135
+-      t138 = 0.1D1 - 0.504755720231149905248D0 * t136
+-      t139 = t138 ** 2
+-      t141 = exp(-0.5D0 * t139)
+-      t144 = 0.118591405585874358362D-1 * t116 + 0.120830459735945720683
+-     #D0 * t138 * t141
+-      t145 = t144 ** 2
+-      t147 = 0.1D1 + 0.143805048498903106908D0 * t113 * t123 + 0.1538461
+-     #53846153846154D2 * t145
+-      t149 = 0.65D-1 / t147
+-      t150 = 0.1D1 / t138
+-      t151 = t135 * t150
+-      t154 = tanh(0.504755720231149905248D30 * t131 * t151)
+-      t156 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t15
++      t59 = 0.1D1 / t58
++      t60 = t56 * t59
++      t61 = rhoa ** (0.1D1 / 0.3D1)
++      t62 = t61 ** 2
++      t64 = 0.1D1 / t62 / rhoa
++      t65 = t60 * t64
++      t67 = 0.1D1 - 0.504755720231149905248D0 * t65
++      t68 = t67 ** 2
++      t70 = exp(-0.5D0 * t68)
++      t73 = 0.118591405585874358362D-1 * t50 * t25 + 0.12083045973594572
++     #0683D0 * t67 * t70
++      t74 = t73 ** 2
++      t77 = 0.1D1 + (0.757133580346724857871D-1 * t21 * t26 * t46 + t74)
++     # * t28
++      t79 = paramscanxk1 / t77
++      t81 = paramscanxc1x * t56
++      t82 = t81 * t59
++      t83 = 0.1D1 / t67
++      t84 = t64 * t83
++      t87 = tanh(0.504755720231149905248D30 * t60 * t84)
++      t89 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t87
++      t90 = t84 * t89
++      t93 = exp(-0.504755720231149905248D0 * t82 * t90)
++      t96 = tanh(0.1D31 - 0.504755720231149905248D30 * t65)
++      t97 = 0.500000000000000000000D0 * t96
++      t98 = 0.500000000000000000000D0 + t97
++      t102 = tanh(0.1D31 * t83)
++      t104 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t10
++     #2
++      t106 = exp(paramscanxc2x * t83 * t104)
++      t107 = paramscanxdx * t106
++      t108 = 0.500000000000000000000D0 - t97
++      t111 = t93 * t98 - 0.1D1 * t107 * t108
++      t112 = 0.1D1 * paramscanxk1
++      t113 = paramscanxhx0 - 0.1D1 - t112 + t79
++      t115 = 0.1D1 + paramscanxk1 - 0.1D1 * t79 + t111 * t113
++      t116 = t20 * t115
++      t117 = sqrt(sigmaaa)
++      t119 = t117 / t18
++      t120 = t119 * t53
++      t121 = sqrt(t120)
++      t125 = exp(-0.190636858599387314752D1 * paramscanxa1 / t121)
++      t127 = 0.1D1 - 0.1D1 * t125
++      t131 = t16 * rhob
++      t132 = t131 ** (0.1D1 / 0.3D1)
++      t133 = rhob * t132
++      t134 = paramscanxmuak * sigmabb
++      t135 = t132 ** 2
++      t136 = 0.1D1 / t135
++      t137 = rhob ** 2
++      t138 = 0.1D1 / t137
++      t139 = t136 * t138
++      t140 = t30 * sigmabb
++      t141 = t140 * t136
++      t142 = t138 * t33
++      t143 = t37 * sigmabb
++      t147 = exp(-0.757133580346724857871D-1 * t143 * t139 * t33)
++      t148 = t142 * t147
++      t151 = 0.1D1 + 0.757133580346724857871D-1 * t141 * t148
++      t155 = sigmabb * t136
++      t158 = 0.1D1 / rhob
++      t161 = taub - 0.250000000000000000000D0 * sigmabb * t158
++      t162 = t161 * t59
++      t163 = rhob ** (0.1D1 / 0.3D1)
++      t164 = t163 ** 2
++      t166 = 0.1D1 / t164 / rhob
++      t167 = t162 * t166
++      t169 = 0.1D1 - 0.504755720231149905248D0 * t167
++      t170 = t169 ** 2
++      t172 = exp(-0.5D0 * t170)
++      t175 = 0.118591405585874358362D-1 * t155 * t138 + 0.12083045973594
++     #5720683D0 * t169 * t172
++      t176 = t175 ** 2
++      t179 = 0.1D1 + (0.757133580346724857871D-1 * t134 * t139 * t151 + 
++     #t176) * t28
++      t181 = paramscanxk1 / t179
++      t183 = paramscanxc1x * t161
++      t184 = t183 * t59
++      t185 = 0.1D1 / t169
++      t186 = t166 * t185
++      t189 = tanh(0.504755720231149905248D30 * t162 * t186)
++      t191 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t18
++     #9
++      t192 = t186 * t191
++      t195 = exp(-0.504755720231149905248D0 * t184 * t192)
++      t198 = tanh(0.1D31 - 0.504755720231149905248D30 * t167)
++      t199 = 0.500000000000000000000D0 * t198
++      t200 = 0.500000000000000000000D0 + t199
++      t204 = tanh(0.1D31 * t185)
++      t206 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t20
+      #4
+-      t160 = exp(-0.336672065394176986800D0 * t131 * t151 * t156)
+-      t163 = tanh(0.1D31 - 0.504755720231149905248D30 * t136)
+-      t164 = 0.500000000000000000000D0 * t163
+-      t165 = 0.500000000000000000000D0 + t164
+-      t168 = tanh(0.1D31 * t150)
+-      t170 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t16
+-     #8
+-      t173 = exp(0.8D0 * t150 * t170)
+-      t174 = 0.500000000000000000000D0 - t164
+-      t177 = t160 * t165 - 0.124D1 * t173 * t174
+-      t178 = 0.109D0 + t149
+-      t180 = 0.1065D1 - t149 + t177 * t178
+-      t181 = t20 * t180
+-      t182 = sqrt(sigmabb)
+-      t184 = t182 / t109
+-      t185 = t184 * t127
+-      t186 = sqrt(t185)
+-      t189 = exp(-0.943252112663908494661D1 / t186)
+-      t191 = 0.1D1 - 0.1D1 * t189
+-      zk(i) = -0.136284044462410474417D1 * t19 * t94 * t104 - 0.13628404
+-     #4462410474417D1 * t110 * t181 * t191
+-      t199 = 0.681420222312052372084D0 * t18 * t20 * t93 * t104
+-      t204 = 0.227140074104017457361D0 * rhoa * t22 * pi * t93 * t104
+-      t205 = t60 ** 2
+-      t206 = 0.1D1 / t205
+-      t209 = sigmaaa / t21 / t17
+-      t213 = t24 * rhoa
+-      t214 = 0.1D1 / t213
+-      t225 = t209 * t25 * t16
+-      t227 = t23 * t214
+-      t242 = sigmaaa / t46 / t213
+-      t243 = t242 * t43
+-      t246 = 0.1D1 / t46 / t24
+-      t247 = t44 * t246
+-      t249 = -0.126188930057787476312D0 * t243 + 0.841259533718583175412
+-     #D0 * t247
+-      t258 = -0.958700323326020712721D-1 * t209 * t33 * t16 - 0.28761009
+-     #6997806213817D0 * t23 * t214 * t32 + 0.143805048498903106908D0 * t
+-     #23 * t25 * (-0.498110728615096424178D-1 * t209 * t29 * t16 - 0.149
+-     #433218584528927254D0 * t23 * t214 * t28 + 0.747166092922644636268D
+-     #-1 * t23 * t25 * (0.498110728615096424178D-1 * t225 + 0.1494332185
+-     #84528927254D0 * t227) * t28) + 0.307692307692307692308D2 * t57 * (
+-     #-0.790609370572495722413D-2 * t225 - 0.237182811171748716724D-1 * 
+-     #t227 + 0.120830459735945720683D0 * t249 * t54 - 0.1208304597359457
+-     #20683D0 * t52 * t249 * t54)
+-      t261 = t43 * t63
+-      t265 = t246 * t63
+-      t269 = 0.1D1 / t52
+-      t274 = t67 ** 2
+-      t277 = t63 * (0.1D1 - 0.1D1 * t274)
+-      t293 = t76 ** 2
+-      t295 = 0.1D1 - 0.1D1 * t293
+-      t296 = t73 * t295
+-      t299 = -0.126188930057787476312D30 * t243 + 0.84125953371858317541
+-     #2D30 * t247
+-      t302 = t269 * t83
+-      t307 = t81 ** 2
+-      t310 = 0.1D1 / t52 / t51 * (0.1D1 - 0.1D1 * t307)
+-      t317 = t86 * t295
+-      t322 = t90 * t206
+-      t329 = 0.681420222312052372084D0 * t19 * t20 * (0.65D-1 * t206 * t
+-     #258 + ((-0.841680163485442467001D-1 * t242 * t261 * t69 + 0.561120
+-     #108990294978001D0 * t44 * t265 * t69 + 0.336672065394176986800D0 *
+-     # t49 * t269 * t69 * t249 - 0.168336032697088493400D0 * t49 * t277 
+-     #* (0.126188930057787476312D30 * t242 * t261 - 0.841259533718583175
+-     #412D30 * t44 * t265 - 0.504755720231149905248D30 * t44 * t48 * t26
+-     #9 * t249)) * t73 * t78 + 0.500000000000000000000D0 * t296 * t299 -
+-     # 0.124D1 * (-0.8D0 * t302 * t249 + 0.400000000000000000000D30 * t3
+-     #10 * t249) * t86 * t87 + 0.620000000000000000000D0 * t317 * t299) 
+-     #* t91 - 0.65D-1 * t322 * t258) * t104
+-      t332 = 0.1D1 / t99 / t98
+-      t335 = 0.1D1 / t18 / t17
+-      t346 = 0.973296829181994948224D0 * t19 * t20 * t93 * t332 * (-0.11
+-     #0064241629820889462D1 * t95 * t335 * t37 * t16 - 0.330192724889462
+-     #668387D1 * t97 * t25) * t102
+-      t350 = 0.681420222312052372084D0 * t109 * t20 * t180 * t191
+-      t355 = 0.227140074104017457361D0 * rhob * t112 * pi * t180 * t191
+-      t356 = t147 ** 2
+-      t357 = 0.1D1 / t356
+-      t360 = sigmabb / t111 / t108
+-      t364 = t114 * rhob
+-      t365 = 0.1D1 / t364
+-      t376 = t360 * t115 * t16
+-      t378 = t113 * t365
+-      t393 = sigmabb / t133 / t364
+-      t394 = t393 * t43
+-      t397 = 0.1D1 / t133 / t114
+-      t398 = t131 * t397
+-      t400 = -0.126188930057787476312D0 * t394 + 0.841259533718583175412
+-     #D0 * t398
+-      t409 = -0.958700323326020712721D-1 * t360 * t123 * t16 - 0.2876100
+-     #96997806213817D0 * t113 * t365 * t122 + 0.143805048498903106908D0 
+-     #* t113 * t115 * (-0.498110728615096424178D-1 * t360 * t119 * t16 -
+-     # 0.149433218584528927254D0 * t113 * t365 * t118 + 0.74716609292264
+-     #4636268D-1 * t113 * t115 * (0.498110728615096424178D-1 * t376 + 0.
+-     #149433218584528927254D0 * t378) * t118) + 0.307692307692307692308D
+-     #2 * t144 * (-0.790609370572495722413D-2 * t376 - 0.237182811171748
+-     #716724D-1 * t378 + 0.120830459735945720683D0 * t400 * t141 - 0.120
+-     #830459735945720683D0 * t139 * t400 * t141)
+-      t412 = t43 * t150
+-      t416 = t397 * t150
+-      t420 = 0.1D1 / t139
+-      t425 = t154 ** 2
+-      t428 = t150 * (0.1D1 - 0.1D1 * t425)
+-      t444 = t163 ** 2
+-      t446 = 0.1D1 - 0.1D1 * t444
+-      t447 = t160 * t446
+-      t450 = -0.126188930057787476312D30 * t394 + 0.84125953371858317541
+-     #2D30 * t398
+-      t453 = t420 * t170
+-      t458 = t168 ** 2
+-      t461 = 0.1D1 / t139 / t138 * (0.1D1 - 0.1D1 * t458)
+-      t468 = t173 * t446
+-      t473 = t177 * t357
+-      t480 = 0.681420222312052372084D0 * t110 * t20 * (0.65D-1 * t357 * 
+-     #t409 + ((-0.841680163485442467001D-1 * t393 * t412 * t156 + 0.5611
+-     #20108990294978001D0 * t131 * t416 * t156 + 0.336672065394176986800
+-     #D0 * t136 * t420 * t156 * t400 - 0.168336032697088493400D0 * t136 
+-     #* t428 * (0.126188930057787476312D30 * t393 * t412 - 0.84125953371
+-     #8583175412D30 * t131 * t416 - 0.504755720231149905248D30 * t131 * 
+-     #t135 * t420 * t400)) * t160 * t165 + 0.500000000000000000000D0 * t
+-     #447 * t450 - 0.124D1 * (-0.8D0 * t453 * t400 + 0.40000000000000000
+-     #0000D30 * t461 * t400) * t173 * t174 + 0.620000000000000000000D0 *
+-     # t468 * t450) * t178 - 0.65D-1 * t473 * t409) * t191
+-      t483 = 0.1D1 / t186 / t185
+-      t486 = 0.1D1 / t109 / t108
+-      t497 = 0.973296829181994948224D0 * t110 * t20 * t180 * t483 * (-0.
+-     #110064241629820889462D1 * t182 * t486 * t127 * t16 - 0.33019272488
+-     #9462668387D1 * t184 * t115) * t189
+-      vrhoc(i) = vrhoc(i) - t199 - t204 - t329 + t346 - t350 - t355 - t4
+-     #80 + t497
+-      vrhoo(i) = vrhoo(i) - t199 - t204 - t329 + t346 + t350 + t355 + t4
+-     #80 - t497
+-      t500 = t22 * t25
+-      t506 = t24 ** 2
+-      t516 = t246 * t43
+-      t526 = 0.143805048498903106908D0 * t500 * t32 + 0.1438050484989031
+-     #06908D0 * t23 * t25 * (0.747166092922644636268D-1 * t500 * t28 - 0
+-     #.558257170413290039222D-2 * sigmaaa * t335 / t506 * t28) + 0.30769
+-     #2307692307692308D2 * t57 * (0.118591405585874358362D-1 * t500 + 0.
+-     #152474664324695603608D-1 * t516 * t54 - 0.152474664324695603608D-1
+-     # * t52 * t246 * t43 * t54)
+-      t529 = t63 * t69
+-      t533 = 0.1D1 / t41 / t16
+-      t534 = t40 * t533
+-      t537 = 0.1D1 / t45 / t506 * t269
+-      t571 = t19 * t20 * (0.65D-1 * t206 * t526 + ((0.841680163485442467
+-     #001D-1 * t516 * t529 + 0.424842877124366511988D-1 * t534 * t537 * 
+-     #t69 - 0.168336032697088493400D0 * t49 * t277 * (-0.126188930057787
+-     #476312D30 * t516 * t63 - 0.636945842765167184389D29 * t534 * t537)
+-     #) * t73 * t78 + 0.630944650288937381559D29 * t296 * t516 - 0.124D1
+-     # * (-0.100951144046229981050D0 * t302 * t516 + 0.50475572023114990
+-     #5248D29 * t310 * t516) * t86 * t87 + 0.782371366358282353132D29 * 
+-     #t317 * t516) * t91 - 0.65D-1 * t322 * t526) * t104
+-      t572 = 0.340710111156026186042D0 * t571
+-      t576 = t94 * t332 / t95 * t102
+-      t577 = 0.803438830384691996314D0 * t576
+-      t578 = t112 * t115
+-      t584 = t114 ** 2
+-      t594 = t397 * t43
+-      t604 = 0.143805048498903106908D0 * t578 * t122 + 0.143805048498903
+-     #106908D0 * t113 * t115 * (0.747166092922644636268D-1 * t578 * t118
+-     # - 0.558257170413290039222D-2 * sigmabb * t486 / t584 * t118) + 0.
+-     #307692307692307692308D2 * t144 * (0.118591405585874358362D-1 * t57
+-     #8 + 0.152474664324695603608D-1 * t594 * t141 - 0.15247466432469560
+-     #3608D-1 * t139 * t397 * t43 * t141)
+-      t607 = t150 * t156
+-      t610 = t130 * t533
+-      t613 = 0.1D1 / t132 / t584 * t420
+-      t647 = t110 * t20 * (0.65D-1 * t357 * t604 + ((0.84168016348544246
+-     #7001D-1 * t594 * t607 + 0.424842877124366511988D-1 * t610 * t613 *
+-     # t156 - 0.168336032697088493400D0 * t136 * t428 * (-0.126188930057
+-     #787476312D30 * t594 * t150 - 0.636945842765167184389D29 * t610 * t
+-     #613)) * t160 * t165 + 0.630944650288937381559D29 * t447 * t594 - 0
+-     #.124D1 * (-0.100951144046229981050D0 * t453 * t594 + 0.50475572023
+-     #1149905248D29 * t461 * t594) * t173 * t174 + 0.7823713663582823531
+-     #32D29 * t468 * t594) * t178 - 0.65D-1 * t473 * t604) * t191
+-      t648 = 0.340710111156026186042D0 * t647
+-      t652 = t181 * t483 / t182 * t189
+-      t653 = 0.803438830384691996314D0 * t652
+-      vsigmacc(i) = vsigmacc(i) - t572 + t577 - t648 + t653
+-      vsigmaco(i) = vsigmaco(i) - 0.681420222312052372084D0 * t571 + 0.1
+-     #60687766076938399263D1 * t576 + 0.681420222312052372084D0 * t647 -
+-     # 0.160687766076938399263D1 * t652
+-      vsigmaoo(i) = vsigmaoo(i) - t572 + t577 - t648 + t653
+-      t662 = t43 * t48
+-      t669 = -0.609898657298782414434D-1 * t662 * t54 + 0.60989865729878
+-     #2414434D-1 * t52 * t43 * t48 * t54
+-      t676 = 0.1D1 / t45 / t213 * t269
+-      t712 = 0.681420222312052372084D0 * t19 * t20 * (0.2000000000000000
+-     #00000D1 * t206 * t57 * t669 + ((-0.336672065394176986800D0 * t662 
+-     #* t529 - 0.169937150849746604795D0 * t534 * t676 * t69 - 0.1683360
+-     #32697088493400D0 * t49 * t277 * (0.504755720231149905248D30 * t662
+-     # * t63 + 0.254778337106066873756D30 * t534 * t676)) * t73 * t78 - 
+-     #0.252377860115574952624D30 * t296 * t662 - 0.124D1 * (0.4038045761
+-     #84919924197D0 * t302 * t662 - 0.201902288092459962099D30 * t310 * 
+-     #t662) * t86 * t87 - 0.312948546543312941253D30 * t317 * t662) * t9
+-     #1 - 0.200000000000000000000D1 * t322 * t57 * t669) * t104
+-      t714 = t43 * t135
+-      t721 = -0.609898657298782414434D-1 * t714 * t141 + 0.6098986572987
+-     #82414434D-1 * t139 * t43 * t135 * t141
+-      t728 = 0.1D1 / t132 / t364 * t420
+-      t764 = 0.681420222312052372084D0 * t110 * t20 * (0.200000000000000
+-     #000000D1 * t357 * t144 * t721 + ((-0.336672065394176986800D0 * t71
+-     #4 * t607 - 0.169937150849746604795D0 * t610 * t728 * t156 - 0.1683
+-     #36032697088493400D0 * t136 * t428 * (0.504755720231149905248D30 * 
+-     #t714 * t150 + 0.254778337106066873756D30 * t610 * t728)) * t160 * 
+-     #t165 - 0.252377860115574952624D30 * t447 * t714 - 0.124D1 * (0.403
+-     #804576184919924197D0 * t453 * t714 - 0.201902288092459962099D30 * 
+-     #t461 * t714) * t173 * t174 - 0.312948546543312941253D30 * t468 * t
+-     #714) * t178 - 0.200000000000000000000D1 * t473 * t144 * t721) * t1
+-     #91
+-      vtauc(i) = vtauc(i) - t712 - t764
+-      vtauo(i) = vtauo(i) - t712 + t764
+-
++      t208 = exp(paramscanxc2x * t185 * t206)
++      t209 = paramscanxdx * t208
++      t210 = 0.500000000000000000000D0 - t199
++      t213 = t195 * t200 - 0.1D1 * t209 * t210
++      t214 = paramscanxhx0 - 0.1D1 - t112 + t181
++      t216 = 0.1D1 + paramscanxk1 - 0.1D1 * t181 + t213 * t214
++      t217 = t20 * t216
++      t218 = sqrt(sigmabb)
++      t220 = t218 / t132
++      t221 = t220 * t158
++      t222 = sqrt(t221)
++      t226 = exp(-0.190636858599387314752D1 * paramscanxa1 / t222)
++      t228 = 0.1D1 - 0.1D1 * t226
++      zk(i) = -0.136284044462410474417D1 * t19 * t116 * t127 - 0.1362840
++     #44462410474417D1 * t133 * t217 * t228
++      t236 = 0.681420222312052372084D0 * t18 * t20 * t115 * t127
++      t241 = 0.227140074104017457361D0 * rhoa * t23 * pi * t115 * t127
++      t242 = t77 ** 2
++      t243 = 0.1D1 / t242
++      t245 = 0.1D1 / t22 / t17
++      t247 = t25 * t46
++      t251 = t24 * rhoa
++      t252 = 0.1D1 / t251
++      t253 = t23 * t252
++      t289 = 0.1D1 / t62 / t251
++      t290 = sigmaaa * t289
++      t291 = t290 * t59
++      t294 = 0.1D1 / t62 / t24
++      t295 = t60 * t294
++      t297 = -0.126188930057787476312D0 * t291 + 0.841259533718583175412
++     #D0 * t295
++      t306 = -0.504755720231149905248D-1 * t21 * t245 * t247 * t16 - 0.1
++     #51426716069344971574D0 * t21 * t253 * t46 + 0.75713358034672485787
++     #1D-1 * t21 * t26 * (-0.504755720231149905248D-1 * t31 * t245 * t34
++     # * t42 * t16 - 0.151426716069344971574D0 * t32 * t252 * t33 * t42 
++     #+ 0.757133580346724857871D-1 * t32 * t34 * (0.50475572023114990524
++     #8D-1 * t38 * t245 * t34 * t16 + 0.151426716069344971574D0 * t38 * 
++     #t253 * t33) * t42) + 0.2D1 * t73 * (-0.790609370572495722413D-2 * 
++     #sigmaaa * t245 * t25 * t16 - 0.237182811171748716724D-1 * t50 * t2
++     #52 + 0.120830459735945720683D0 * t297 * t70 - 0.120830459735945720
++     #683D0 * t68 * t297 * t70)
++      t310 = t59 * t83
++      t311 = t310 * t89
++      t314 = t294 * t83
++      t318 = 0.1D1 / t68
++      t319 = t64 * t318
++      t324 = t87 ** 2
++      t326 = 0.1D1 - 0.1D1 * t324
++      t342 = t96 ** 2
++      t344 = 0.1D1 - 0.1D1 * t342
++      t345 = t93 * t344
++      t348 = -0.126188930057787476312D30 * t291 + 0.84125953371858317541
++     #2D30 * t295
++      t351 = paramscanxc2x * t318
++      t357 = paramscanxc2x / t68 / t67
++      t358 = t102 ** 2
++      t360 = 0.1D1 - 0.1D1 * t358
++      t366 = t106 * t108
++      t374 = t111 * t243
++      t381 = 0.681420222312052372084D0 * t19 * t20 * (t243 * t306 + ((-0
++     #.126188930057787476312D0 * paramscanxc1x * sigmaaa * t289 * t311 +
++     # 0.841259533718583175412D0 * t82 * t314 * t89 + 0.5047557202311499
++     #05248D0 * t82 * t319 * t89 * t297 - 0.252377860115574952624D0 * t8
++     #2 * t84 * t326 * (0.126188930057787476312D30 * t290 * t310 - 0.841
++     #259533718583175412D30 * t60 * t314 - 0.504755720231149905248D30 * 
++     #t60 * t319 * t297)) * t93 * t98 + 0.500000000000000000000D0 * t345
++     # * t348 - 0.1D1 * paramscanxdx * (-0.1D1 * t351 * t104 * t297 + 0.
++     #500000000000000000000D30 * t357 * t360 * t297) * t366 + 0.50000000
++     #0000000000000D0 * t107 * t344 * t348) * t113 - 0.1D1 * t374 * t306
++     #) * t127
++      t384 = 0.1D1 / t121 / t120
++      t387 = 0.1D1 / t18 / t17
++      t398 = 0.196709074391559034787D0 * t19 * t116 * paramscanxa1 * t38
++     #4 * (-0.110064241629820889462D1 * t117 * t387 * t53 * t16 - 0.3301
++     #92724889462668387D1 * t119 * t25) * t125
++      t402 = 0.681420222312052372084D0 * t132 * t20 * t216 * t228
++      t407 = 0.227140074104017457361D0 * rhob * t136 * pi * t216 * t228
++      t408 = t179 ** 2
++      t409 = 0.1D1 / t408
++      t411 = 0.1D1 / t135 / t131
++      t413 = t138 * t151
++      t417 = t137 * rhob
++      t418 = 0.1D1 / t417
++      t419 = t136 * t418
++      t455 = 0.1D1 / t164 / t417
++      t456 = sigmabb * t455
++      t457 = t456 * t59
++      t460 = 0.1D1 / t164 / t137
++      t461 = t162 * t460
++      t463 = -0.126188930057787476312D0 * t457 + 0.841259533718583175412
++     #D0 * t461
++      t472 = -0.504755720231149905248D-1 * t134 * t411 * t413 * t16 - 0.
++     #151426716069344971574D0 * t134 * t419 * t151 + 0.75713358034672485
++     #7871D-1 * t134 * t139 * (-0.504755720231149905248D-1 * t140 * t411
++     # * t142 * t147 * t16 - 0.151426716069344971574D0 * t141 * t418 * t
++     #33 * t147 + 0.757133580346724857871D-1 * t141 * t142 * (0.50475572
++     #0231149905248D-1 * t143 * t411 * t142 * t16 + 0.151426716069344971
++     #574D0 * t143 * t419 * t33) * t147) + 0.2D1 * t175 * (-0.7906093705
++     #72495722413D-2 * sigmabb * t411 * t138 * t16 - 0.23718281117174871
++     #6724D-1 * t155 * t418 + 0.120830459735945720683D0 * t463 * t172 - 
++     #0.120830459735945720683D0 * t170 * t463 * t172)
++      t476 = t59 * t185
++      t477 = t476 * t191
++      t480 = t460 * t185
++      t484 = 0.1D1 / t170
++      t485 = t166 * t484
++      t490 = t189 ** 2
++      t492 = 0.1D1 - 0.1D1 * t490
++      t508 = t198 ** 2
++      t510 = 0.1D1 - 0.1D1 * t508
++      t511 = t195 * t510
++      t514 = -0.126188930057787476312D30 * t457 + 0.84125953371858317541
++     #2D30 * t461
++      t517 = paramscanxc2x * t484
++      t523 = paramscanxc2x / t170 / t169
++      t524 = t204 ** 2
++      t526 = 0.1D1 - 0.1D1 * t524
++      t532 = t208 * t210
++      t540 = t213 * t409
++      t547 = 0.681420222312052372084D0 * t133 * t20 * (t409 * t472 + ((-
++     #0.126188930057787476312D0 * paramscanxc1x * sigmabb * t455 * t477 
++     #+ 0.841259533718583175412D0 * t184 * t480 * t191 + 0.5047557202311
++     #49905248D0 * t184 * t485 * t191 * t463 - 0.252377860115574952624D0
++     # * t184 * t186 * t492 * (0.126188930057787476312D30 * t456 * t476 
++     #- 0.841259533718583175412D30 * t162 * t480 - 0.5047557202311499052
++     #48D30 * t162 * t485 * t463)) * t195 * t200 + 0.5000000000000000000
++     #00D0 * t511 * t514 - 0.1D1 * paramscanxdx * (-0.1D1 * t517 * t206 
++     #* t463 + 0.500000000000000000000D30 * t523 * t526 * t463) * t532 +
++     # 0.500000000000000000000D0 * t209 * t510 * t514) * t214 - 0.1D1 * 
++     #t540 * t472) * t228
++      t550 = 0.1D1 / t222 / t221
++      t553 = 0.1D1 / t132 / t131
++      t564 = 0.196709074391559034787D0 * t133 * t217 * paramscanxa1 * t5
++     #50 * (-0.110064241629820889462D1 * t218 * t553 * t158 * t16 - 0.33
++     #0192724889462668387D1 * t220 * t138) * t226
++      vrhoc(i) = vrhoc(i) - t236 - t241 - t381 + t398 - t402 - t407 - t5
++     #47 + t564
++      vrhoo(i) = vrhoo(i) - t236 - t241 - t381 + t398 + t402 + t407 + t5
++     #47 - t564
++      t574 = t24 ** 2
++      t576 = 0.1D1 / t27
++      t587 = t294 * t59
++      t597 = 0.757133580346724857871D-1 * paramscanxmuak * t23 * t247 + 
++     #0.757133580346724857871D-1 * t21 * t26 * (0.757133580346724857871D
++     #-1 * t30 * t23 * t43 - 0.573251258488650465949D-2 * t31 * t387 / t
++     #574 * t576 * t37 * t42) + 0.2D1 * t73 * (0.118591405585874358362D-
++     #1 * t26 + 0.152474664324695603608D-1 * t587 * t70 - 0.152474664324
++     #695603608D-1 * t68 * t294 * t59 * t70)
++      t603 = 0.1D1 / t57 / t16
++      t604 = t81 * t603
++      t607 = 0.1D1 / t61 / t574 * t318
++      t613 = t56 * t603
++      t649 = t19 * t20 * (t243 * t597 + ((0.126188930057787476312D0 * pa
++     #ramscanxc1x * t294 * t311 + 0.636945842765167184389D-1 * t604 * t6
++     #07 * t89 - 0.252377860115574952624D0 * t82 * t84 * t326 * (-0.1261
++     #88930057787476312D30 * t587 * t83 - 0.636945842765167184389D29 * t
++     #613 * t607)) * t93 * t98 + 0.630944650288937381559D29 * t345 * t58
++     #7 - 0.1D1 * paramscanxdx * (-0.126188930057787476312D0 * t351 * t1
++     #04 * t294 * t59 + 0.630944650288937381559D29 * t357 * t360 * t294 
++     #* t59) * t366 + 0.630944650288937381559D29 * t107 * t344 * t294 * 
++     #t59) * t113 - 0.1D1 * t374 * t597) * t127
++      t650 = 0.340710111156026186042D0 * t649
++      t655 = t116 * paramscanxa1 * t384 / t117 * t125
++      t656 = 0.162379763209582246269D0 * t655
++      t664 = t137 ** 2
++      t676 = t460 * t59
++      t686 = 0.757133580346724857871D-1 * paramscanxmuak * t136 * t413 +
++     # 0.757133580346724857871D-1 * t134 * t139 * (0.7571335803467248578
++     #71D-1 * t30 * t136 * t148 - 0.573251258488650465949D-2 * t140 * t5
++     #53 / t664 * t576 * t37 * t147) + 0.2D1 * t175 * (0.118591405585874
++     #358362D-1 * t139 + 0.152474664324695603608D-1 * t676 * t172 - 0.15
++     #2474664324695603608D-1 * t170 * t460 * t59 * t172)
++      t691 = t183 * t603
++      t694 = 0.1D1 / t163 / t664 * t484
++      t700 = t161 * t603
++      t736 = t133 * t20 * (t409 * t686 + ((0.126188930057787476312D0 * p
++     #aramscanxc1x * t460 * t477 + 0.636945842765167184389D-1 * t691 * t
++     #694 * t191 - 0.252377860115574952624D0 * t184 * t186 * t492 * (-0.
++     #126188930057787476312D30 * t676 * t185 - 0.636945842765167184389D2
++     #9 * t700 * t694)) * t195 * t200 + 0.630944650288937381559D29 * t51
++     #1 * t676 - 0.1D1 * paramscanxdx * (-0.126188930057787476312D0 * t5
++     #17 * t206 * t460 * t59 + 0.630944650288937381559D29 * t523 * t526 
++     #* t460 * t59) * t532 + 0.630944650288937381559D29 * t209 * t510 * 
++     #t460 * t59) * t214 - 0.1D1 * t540 * t686) * t228
++      t737 = 0.340710111156026186042D0 * t736
++      t742 = t217 * paramscanxa1 * t550 / t218 * t226
++      t743 = 0.162379763209582246269D0 * t742
++      vsigmacc(i) = vsigmacc(i) - t650 + t656 - t737 + t743
++      vsigmaco(i) = vsigmaco(i) - 0.681420222312052372084D0 * t649 + 0.3
++     #24759526419164492538D0 * t655 + 0.681420222312052372084D0 * t736 -
++     # 0.324759526419164492538D0 * t742
++      vsigmaoo(i) = vsigmaoo(i) - t650 + t656 - t737 + t743
++      t752 = t59 * t64
++      t759 = -0.609898657298782414434D-1 * t752 * t70 + 0.60989865729878
++     #2414434D-1 * t68 * t59 * t64 * t70
++      t762 = paramscanxc1x * t59
++      t767 = 0.1D1 / t61 / t251 * t318
++      t810 = 0.681420222312052372084D0 * t19 * t20 * (0.2D1 * t243 * t73
++     # * t759 + ((-0.504755720231149905248D0 * t762 * t90 - 0.2547783371
++     #06066873756D0 * t604 * t767 * t89 - 0.252377860115574952624D0 * t8
++     #2 * t84 * t326 * (0.504755720231149905248D30 * t752 * t83 + 0.2547
++     #78337106066873756D30 * t613 * t767)) * t93 * t98 - 0.2523778601155
++     #74952624D30 * t345 * t752 - 0.1D1 * paramscanxdx * (0.504755720231
++     #149905248D0 * t351 * t104 * t59 * t64 - 0.252377860115574952624D30
++     # * t357 * t360 * t59 * t64) * t366 - 0.252377860115574952624D30 * 
++     #t107 * t344 * t59 * t64) * t113 - 0.2D1 * t374 * t73 * t759) * t12
++     #7
++      t812 = t59 * t166
++      t819 = -0.609898657298782414434D-1 * t812 * t172 + 0.6098986572987
++     #82414434D-1 * t170 * t59 * t166 * t172
++      t826 = 0.1D1 / t163 / t417 * t484
++      t869 = 0.681420222312052372084D0 * t133 * t20 * (0.2D1 * t409 * t1
++     #75 * t819 + ((-0.504755720231149905248D0 * t762 * t192 - 0.2547783
++     #37106066873756D0 * t691 * t826 * t191 - 0.252377860115574952624D0 
++     #* t184 * t186 * t492 * (0.504755720231149905248D30 * t812 * t185 +
++     # 0.254778337106066873756D30 * t700 * t826)) * t195 * t200 - 0.2523
++     #77860115574952624D30 * t511 * t812 - 0.1D1 * paramscanxdx * (0.504
++     #755720231149905248D0 * t517 * t206 * t59 * t166 - 0.25237786011557
++     #4952624D30 * t523 * t526 * t59 * t166) * t532 - 0.2523778601155749
++     #52624D30 * t209 * t510 * t59 * t166) * t214 - 0.2D1 * t540 * t175 
++     #* t819) * t228
++      vtauc(i) = vtauc(i) - t810 - t869
++      vtauo(i) = vtauo(i) - t810 + t869
+                endif
+              endif
+            enddo
+@@ -3988,13 +4015,12 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -4004,48 +4030,57 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       tau = taub
+       t13 = pi ** 2
+       t15 = (t13 * rhob) ** (0.1D1 / 0.3D1)
+-      t18 = t15 ** 2
+-      t20 = sigmabb / t18
++      t19 = t15 ** 2
++      t20 = 0.1D1 / t19
+       t21 = rhob ** 2
+       t22 = 0.1D1 / t21
+       t23 = t20 * t22
+-      t25 = exp(-0.747166092922644636268D-1 * t23)
+-      t34 = 0.1D1 / rhob
+-      t38 = t13 ** (0.1D1 / 0.3D1)
+-      t39 = t38 ** 2
+-      t41 = (taub - 0.250000000000000000000D0 * sigmabb * t34) / t39
+-      t42 = rhob ** (0.1D1 / 0.3D1)
+-      t43 = t42 ** 2
+-      t45 = 0.1D1 / t43 / rhob
+-      t46 = t41 * t45
+-      t48 = 0.1D1 - 0.504755720231149905248D0 * t46
+-      t49 = t48 ** 2
+-      t51 = exp(-0.5D0 * t49)
+-      t55 = (0.118591405585874358362D-1 * t23 + 0.120830459735945720683D
+-     #0 * t48 * t51) ** 2
+-      t59 = 0.65D-1 / (0.1D1 + 0.143805048498903106908D0 * t20 * t22 * (
+-     #0.1D1 + 0.747166092922644636268D-1 * t20 * t22 * t25) + 0.15384615
+-     #3846153846154D2 * t55)
+-      t60 = 0.1D1 / t48
+-      t61 = t45 * t60
+-      t64 = tanh(0.504755720231149905248D30 * t41 * t61)
+-      t70 = exp(-0.336672065394176986800D0 * t41 * t61 * (0.500000000000
+-     #000000000D0 + 0.500000000000000000000D0 * t64))
+-      t73 = tanh(0.1D31 - 0.504755720231149905248D30 * t46)
+-      t74 = 0.500000000000000000000D0 * t73
+-      t78 = tanh(0.1D31 * t60)
+-      t83 = exp(0.8D0 * t60 * (0.500000000000000000000D0 - 0.50000000000
+-     #0000000000D0 * t78))
+-      t92 = sqrt(sigmabb)
+-      t96 = sqrt(t92 / t15 * t34)
+-      t99 = exp(-0.943252112663908494661D1 / t96)
+-      zk(i) = -0.136284044462410474417D1 * rhob * t15 / pi * (0.1065D1 -
+-     # t59 + (t70 * (0.500000000000000000000D0 + t74) - 0.124D1 * t83 * 
+-     #(0.500000000000000000000D0 - t74)) * (0.109D0 + t59)) * (0.1D1 - 0
+-     #.1D1 * t99)
+-
++      t24 = paramscanxmuak ** 2
++      t25 = 0.1D1 / paramscanxk1
++      t26 = t24 * t25
++      t30 = 0.1D1 / paramscanxmuak
++      t34 = abs(-0.1D1 * t26 + 0.112654320987654320988D0)
++      t39 = exp(-0.757133580346724857871D-1 * t34 * sigmabb * t23 * t30)
++      t50 = 0.1D1 / rhob
++      t53 = taub - 0.250000000000000000000D0 * sigmabb * t50
++      t54 = t13 ** (0.1D1 / 0.3D1)
++      t55 = t54 ** 2
++      t56 = 0.1D1 / t55
++      t57 = t53 * t56
++      t58 = rhob ** (0.1D1 / 0.3D1)
++      t59 = t58 ** 2
++      t61 = 0.1D1 / t59 / rhob
++      t62 = t57 * t61
++      t64 = 0.1D1 - 0.504755720231149905248D0 * t62
++      t65 = t64 ** 2
++      t67 = exp(-0.5D0 * t65)
++      t71 = (0.118591405585874358362D-1 * sigmabb * t20 * t22 + 0.120830
++     #459735945720683D0 * t64 * t67) ** 2
++      t76 = paramscanxk1 / (0.1D1 + (0.757133580346724857871D-1 * params
++     #canxmuak * sigmabb * t23 * (0.1D1 + 0.757133580346724857871D-1 * (
++     #t26 - 0.112654320987654320988D0) * sigmabb * t20 * t22 * t30 * t39
++     #) + t71) * t25)
++      t80 = 0.1D1 / t64
++      t81 = t61 * t80
++      t84 = tanh(0.504755720231149905248D30 * t57 * t81)
++      t90 = exp(-0.504755720231149905248D0 * paramscanxc1x * t53 * t56 *
++     # t81 * (0.500000000000000000000D0 + 0.500000000000000000000D0 * t8
++     #4))
++      t93 = tanh(0.1D31 - 0.504755720231149905248D30 * t62)
++      t94 = 0.500000000000000000000D0 * t93
++      t99 = tanh(0.1D31 * t80)
++      t103 = exp(paramscanxc2x * t80 * (0.500000000000000000000D0 - 0.50
++     #0000000000000000000D0 * t99))
++      t114 = sqrt(sigmabb)
++      t118 = sqrt(t114 / t15 * t50)
++      t122 = exp(-0.190636858599387314752D1 * paramscanxa1 / t118)
++      zk(i) = -0.136284044462410474417D1 * rhob * t15 / pi * (0.1D1 + pa
++     #ramscanxk1 - 0.1D1 * t76 + (t90 * (0.500000000000000000000D0 + t94
++     #) - 0.1D1 * paramscanxdx * t103 * (0.500000000000000000000D0 - t94
++     #)) * (paramscanxhx0 - 0.1D1 - 0.1D1 * paramscanxk1 + t76)) * (0.1D
++     #1 - 0.1D1 * t122)
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -4055,48 +4090,57 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       tau = taua
+       t13 = pi ** 2
+       t15 = (t13 * rhoa) ** (0.1D1 / 0.3D1)
+-      t18 = t15 ** 2
+-      t20 = sigmaaa / t18
++      t19 = t15 ** 2
++      t20 = 0.1D1 / t19
+       t21 = rhoa ** 2
+       t22 = 0.1D1 / t21
+       t23 = t20 * t22
+-      t25 = exp(-0.747166092922644636268D-1 * t23)
+-      t34 = 0.1D1 / rhoa
+-      t38 = t13 ** (0.1D1 / 0.3D1)
+-      t39 = t38 ** 2
+-      t41 = (taua - 0.250000000000000000000D0 * sigmaaa * t34) / t39
+-      t42 = rhoa ** (0.1D1 / 0.3D1)
+-      t43 = t42 ** 2
+-      t45 = 0.1D1 / t43 / rhoa
+-      t46 = t41 * t45
+-      t48 = 0.1D1 - 0.504755720231149905248D0 * t46
+-      t49 = t48 ** 2
+-      t51 = exp(-0.5D0 * t49)
+-      t55 = (0.118591405585874358362D-1 * t23 + 0.120830459735945720683D
+-     #0 * t48 * t51) ** 2
+-      t59 = 0.65D-1 / (0.1D1 + 0.143805048498903106908D0 * t20 * t22 * (
+-     #0.1D1 + 0.747166092922644636268D-1 * t20 * t22 * t25) + 0.15384615
+-     #3846153846154D2 * t55)
+-      t60 = 0.1D1 / t48
+-      t61 = t45 * t60
+-      t64 = tanh(0.504755720231149905248D30 * t41 * t61)
+-      t70 = exp(-0.336672065394176986800D0 * t41 * t61 * (0.500000000000
+-     #000000000D0 + 0.500000000000000000000D0 * t64))
+-      t73 = tanh(0.1D31 - 0.504755720231149905248D30 * t46)
+-      t74 = 0.500000000000000000000D0 * t73
+-      t78 = tanh(0.1D31 * t60)
+-      t83 = exp(0.8D0 * t60 * (0.500000000000000000000D0 - 0.50000000000
+-     #0000000000D0 * t78))
+-      t92 = sqrt(sigmaaa)
+-      t96 = sqrt(t92 / t15 * t34)
+-      t99 = exp(-0.943252112663908494661D1 / t96)
+-      zk(i) = -0.136284044462410474417D1 * rhoa * t15 / pi * (0.1065D1 -
+-     # t59 + (t70 * (0.500000000000000000000D0 + t74) - 0.124D1 * t83 * 
+-     #(0.500000000000000000000D0 - t74)) * (0.109D0 + t59)) * (0.1D1 - 0
+-     #.1D1 * t99)
+-
++      t24 = paramscanxmuak ** 2
++      t25 = 0.1D1 / paramscanxk1
++      t26 = t24 * t25
++      t30 = 0.1D1 / paramscanxmuak
++      t34 = abs(-0.1D1 * t26 + 0.112654320987654320988D0)
++      t39 = exp(-0.757133580346724857871D-1 * t34 * sigmaaa * t23 * t30)
++      t50 = 0.1D1 / rhoa
++      t53 = taua - 0.250000000000000000000D0 * sigmaaa * t50
++      t54 = t13 ** (0.1D1 / 0.3D1)
++      t55 = t54 ** 2
++      t56 = 0.1D1 / t55
++      t57 = t53 * t56
++      t58 = rhoa ** (0.1D1 / 0.3D1)
++      t59 = t58 ** 2
++      t61 = 0.1D1 / t59 / rhoa
++      t62 = t57 * t61
++      t64 = 0.1D1 - 0.504755720231149905248D0 * t62
++      t65 = t64 ** 2
++      t67 = exp(-0.5D0 * t65)
++      t71 = (0.118591405585874358362D-1 * sigmaaa * t20 * t22 + 0.120830
++     #459735945720683D0 * t64 * t67) ** 2
++      t76 = paramscanxk1 / (0.1D1 + (0.757133580346724857871D-1 * params
++     #canxmuak * sigmaaa * t23 * (0.1D1 + 0.757133580346724857871D-1 * (
++     #t26 - 0.112654320987654320988D0) * sigmaaa * t20 * t22 * t30 * t39
++     #) + t71) * t25)
++      t80 = 0.1D1 / t64
++      t81 = t61 * t80
++      t84 = tanh(0.504755720231149905248D30 * t57 * t81)
++      t90 = exp(-0.504755720231149905248D0 * paramscanxc1x * t53 * t56 *
++     # t81 * (0.500000000000000000000D0 + 0.500000000000000000000D0 * t8
++     #4))
++      t93 = tanh(0.1D31 - 0.504755720231149905248D30 * t62)
++      t94 = 0.500000000000000000000D0 * t93
++      t99 = tanh(0.1D31 * t80)
++      t103 = exp(paramscanxc2x * t80 * (0.500000000000000000000D0 - 0.50
++     #0000000000000000000D0 * t99))
++      t114 = sqrt(sigmaaa)
++      t118 = sqrt(t114 / t15 * t50)
++      t122 = exp(-0.190636858599387314752D1 * paramscanxa1 / t118)
++      zk(i) = -0.136284044462410474417D1 * rhoa * t15 / pi * (0.1D1 + pa
++     #ramscanxk1 - 0.1D1 * t76 + (t90 * (0.500000000000000000000D0 + t94
++     #) - 0.1D1 * paramscanxdx * t103 * (0.500000000000000000000D0 - t94
++     #)) * (paramscanxhx0 - 0.1D1 - 0.1D1 * paramscanxk1 + t76)) * (0.1D
++     #1 - 0.1D1 * t122)
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -4112,84 +4156,97 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       t16 = pi ** 2
+       t18 = (t16 * rhoa) ** (0.1D1 / 0.3D1)
+       t20 = 0.1D1 / pi
+-      t21 = t18 ** 2
+-      t23 = sigmaaa / t21
++      t22 = t18 ** 2
++      t23 = 0.1D1 / t22
+       t24 = rhoa ** 2
+       t25 = 0.1D1 / t24
+       t26 = t23 * t25
+-      t28 = exp(-0.747166092922644636268D-1 * t26)
+-      t37 = 0.1D1 / rhoa
+-      t41 = t16 ** (0.1D1 / 0.3D1)
+-      t42 = t41 ** 2
+-      t43 = 0.1D1 / t42
+-      t44 = (taua - 0.250000000000000000000D0 * sigmaaa * t37) * t43
+-      t45 = rhoa ** (0.1D1 / 0.3D1)
+-      t46 = t45 ** 2
+-      t48 = 0.1D1 / t46 / rhoa
+-      t49 = t44 * t48
+-      t51 = 0.1D1 - 0.504755720231149905248D0 * t49
+-      t52 = t51 ** 2
+-      t54 = exp(-0.5D0 * t52)
+-      t58 = (0.118591405585874358362D-1 * t26 + 0.120830459735945720683D
+-     #0 * t51 * t54) ** 2
+-      t62 = 0.65D-1 / (0.1D1 + 0.143805048498903106908D0 * t23 * t25 * (
+-     #0.1D1 + 0.747166092922644636268D-1 * t23 * t25 * t28) + 0.15384615
+-     #3846153846154D2 * t58)
+-      t63 = 0.1D1 / t51
+-      t64 = t48 * t63
+-      t67 = tanh(0.504755720231149905248D30 * t44 * t64)
+-      t73 = exp(-0.336672065394176986800D0 * t44 * t64 * (0.500000000000
+-     #000000000D0 + 0.500000000000000000000D0 * t67))
+-      t76 = tanh(0.1D31 - 0.504755720231149905248D30 * t49)
+-      t77 = 0.500000000000000000000D0 * t76
+-      t81 = tanh(0.1D31 * t63)
+-      t86 = exp(0.8D0 * t63 * (0.500000000000000000000D0 - 0.50000000000
+-     #0000000000D0 * t81))
+-      t95 = sqrt(sigmaaa)
+-      t99 = sqrt(t95 / t18 * t37)
+-      t102 = exp(-0.943252112663908494661D1 / t99)
+-      t109 = (t16 * rhob) ** (0.1D1 / 0.3D1)
+-      t111 = t109 ** 2
+-      t113 = sigmabb / t111
+-      t114 = rhob ** 2
+-      t115 = 0.1D1 / t114
+-      t116 = t113 * t115
+-      t118 = exp(-0.747166092922644636268D-1 * t116)
+-      t127 = 0.1D1 / rhob
+-      t131 = (taub - 0.250000000000000000000D0 * sigmabb * t127) * t43
+-      t132 = rhob ** (0.1D1 / 0.3D1)
+-      t133 = t132 ** 2
+-      t135 = 0.1D1 / t133 / rhob
+-      t136 = t131 * t135
+-      t138 = 0.1D1 - 0.504755720231149905248D0 * t136
+-      t139 = t138 ** 2
+-      t141 = exp(-0.5D0 * t139)
+-      t145 = (0.118591405585874358362D-1 * t116 + 0.12083045973594572068
+-     #3D0 * t138 * t141) ** 2
+-      t149 = 0.65D-1 / (0.1D1 + 0.143805048498903106908D0 * t113 * t115 
+-     #* (0.1D1 + 0.747166092922644636268D-1 * t113 * t115 * t118) + 0.15
+-     #3846153846153846154D2 * t145)
+-      t150 = 0.1D1 / t138
+-      t151 = t135 * t150
+-      t154 = tanh(0.504755720231149905248D30 * t131 * t151)
+-      t160 = exp(-0.336672065394176986800D0 * t131 * t151 * (0.500000000
+-     #000000000000D0 + 0.500000000000000000000D0 * t154))
+-      t163 = tanh(0.1D31 - 0.504755720231149905248D30 * t136)
+-      t164 = 0.500000000000000000000D0 * t163
+-      t168 = tanh(0.1D31 * t150)
+-      t173 = exp(0.8D0 * t150 * (0.500000000000000000000D0 - 0.500000000
+-     #000000000000D0 * t168))
+-      t182 = sqrt(sigmabb)
+-      t186 = sqrt(t182 / t109 * t127)
+-      t189 = exp(-0.943252112663908494661D1 / t186)
+-      zk(i) = -0.136284044462410474417D1 * rhoa * t18 * t20 * (0.1065D1 
+-     #- t62 + (t73 * (0.500000000000000000000D0 + t77) - 0.124D1 * t86 *
+-     # (0.500000000000000000000D0 - t77)) * (0.109D0 + t62)) * (0.1D1 - 
+-     #0.1D1 * t102) - 0.136284044462410474417D1 * rhob * t109 * t20 * (0
+-     #.1065D1 - t149 + (t160 * (0.500000000000000000000D0 + t164) - 0.12
+-     #4D1 * t173 * (0.500000000000000000000D0 - t164)) * (0.109D0 + t149
+-     #)) * (0.1D1 - 0.1D1 * t189)
+-
++      t27 = paramscanxmuak ** 2
++      t28 = 0.1D1 / paramscanxk1
++      t29 = t27 * t28
++      t30 = t29 - 0.112654320987654320988D0
++      t33 = 0.1D1 / paramscanxmuak
++      t37 = abs(-0.1D1 * t29 + 0.112654320987654320988D0)
++      t42 = exp(-0.757133580346724857871D-1 * t37 * sigmaaa * t26 * t33)
++      t53 = 0.1D1 / rhoa
++      t56 = taua - 0.250000000000000000000D0 * sigmaaa * t53
++      t57 = t16 ** (0.1D1 / 0.3D1)
++      t58 = t57 ** 2
++      t59 = 0.1D1 / t58
++      t60 = t56 * t59
++      t61 = rhoa ** (0.1D1 / 0.3D1)
++      t62 = t61 ** 2
++      t64 = 0.1D1 / t62 / rhoa
++      t65 = t60 * t64
++      t67 = 0.1D1 - 0.504755720231149905248D0 * t65
++      t68 = t67 ** 2
++      t70 = exp(-0.5D0 * t68)
++      t74 = (0.118591405585874358362D-1 * sigmaaa * t23 * t25 + 0.120830
++     #459735945720683D0 * t67 * t70) ** 2
++      t79 = paramscanxk1 / (0.1D1 + (0.757133580346724857871D-1 * params
++     #canxmuak * sigmaaa * t26 * (0.1D1 + 0.757133580346724857871D-1 * t
++     #30 * sigmaaa * t23 * t25 * t33 * t42) + t74) * t28)
++      t83 = 0.1D1 / t67
++      t84 = t64 * t83
++      t87 = tanh(0.504755720231149905248D30 * t60 * t84)
++      t93 = exp(-0.504755720231149905248D0 * paramscanxc1x * t56 * t59 *
++     # t84 * (0.500000000000000000000D0 + 0.500000000000000000000D0 * t8
++     #7))
++      t96 = tanh(0.1D31 - 0.504755720231149905248D30 * t65)
++      t97 = 0.500000000000000000000D0 * t96
++      t102 = tanh(0.1D31 * t83)
++      t106 = exp(paramscanxc2x * t83 * (0.500000000000000000000D0 - 0.50
++     #0000000000000000000D0 * t102))
++      t112 = 0.1D1 * paramscanxk1
++      t117 = sqrt(sigmaaa)
++      t121 = sqrt(t117 / t18 * t53)
++      t125 = exp(-0.190636858599387314752D1 * paramscanxa1 / t121)
++      t132 = (t16 * rhob) ** (0.1D1 / 0.3D1)
++      t135 = t132 ** 2
++      t136 = 0.1D1 / t135
++      t137 = rhob ** 2
++      t138 = 0.1D1 / t137
++      t139 = t136 * t138
++      t147 = exp(-0.757133580346724857871D-1 * t37 * sigmabb * t139 * t3
++     #3)
++      t158 = 0.1D1 / rhob
++      t161 = taub - 0.250000000000000000000D0 * sigmabb * t158
++      t162 = t161 * t59
++      t163 = rhob ** (0.1D1 / 0.3D1)
++      t164 = t163 ** 2
++      t166 = 0.1D1 / t164 / rhob
++      t167 = t162 * t166
++      t169 = 0.1D1 - 0.504755720231149905248D0 * t167
++      t170 = t169 ** 2
++      t172 = exp(-0.5D0 * t170)
++      t176 = (0.118591405585874358362D-1 * sigmabb * t136 * t138 + 0.120
++     #830459735945720683D0 * t169 * t172) ** 2
++      t181 = paramscanxk1 / (0.1D1 + (0.757133580346724857871D-1 * param
++     #scanxmuak * sigmabb * t139 * (0.1D1 + 0.757133580346724857871D-1 *
++     # t30 * sigmabb * t136 * t138 * t33 * t147) + t176) * t28)
++      t185 = 0.1D1 / t169
++      t186 = t166 * t185
++      t189 = tanh(0.504755720231149905248D30 * t162 * t186)
++      t195 = exp(-0.504755720231149905248D0 * paramscanxc1x * t161 * t59
++     # * t186 * (0.500000000000000000000D0 + 0.500000000000000000000D0 *
++     # t189))
++      t198 = tanh(0.1D31 - 0.504755720231149905248D30 * t167)
++      t199 = 0.500000000000000000000D0 * t198
++      t204 = tanh(0.1D31 * t185)
++      t208 = exp(paramscanxc2x * t185 * (0.500000000000000000000D0 - 0.5
++     #00000000000000000000D0 * t204))
++      t218 = sqrt(sigmabb)
++      t222 = sqrt(t218 / t132 * t158)
++      t226 = exp(-0.190636858599387314752D1 * paramscanxa1 / t222)
++      zk(i) = -0.136284044462410474417D1 * rhoa * t18 * t20 * (0.1D1 + p
++     #aramscanxk1 - 0.1D1 * t79 + (t93 * (0.500000000000000000000D0 + t9
++     #7) - 0.1D1 * paramscanxdx * t106 * (0.500000000000000000000D0 - t9
++     #7)) * (paramscanxhx0 - 0.1D1 - t112 + t79)) * (0.1D1 - 0.1D1 * t12
++     #5) - 0.136284044462410474417D1 * rhob * t132 * t20 * (0.1D1 + para
++     #mscanxk1 - 0.1D1 * t181 + (t195 * (0.500000000000000000000D0 + t19
++     #9) - 0.1D1 * paramscanxdx * t208 * (0.500000000000000000000D0 - t1
++     #99)) * (paramscanxhx0 - 0.1D1 - t112 + t181)) * (0.1D1 - 0.1D1 * t
++     #226)
+                endif
+              endif
+            enddo
+@@ -4199,7 +4256,7 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -4214,297 +4271,333 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       t10 = t9 ** (0.1D1 / 0.3D1)
+       t11 = rhoa * t10
+       t12 = 0.1D1 / pi
+-      t13 = t10 ** 2
+-      t14 = 0.1D1 / t13
+-      t15 = sigmaaa * t14
++      t13 = paramscanxmuak * sigmaaa
++      t14 = t10 ** 2
++      t15 = 0.1D1 / t14
+       t16 = rhoa ** 2
+       t17 = 0.1D1 / t16
+       t18 = t15 * t17
+-      t20 = exp(-0.747166092922644636268D-1 * t18)
+-      t21 = t17 * t20
+-      t24 = 0.1D1 + 0.747166092922644636268D-1 * t15 * t21
+-      t25 = t17 * t24
+-      t29 = 0.1D1 / rhoa
+-      t32 = taua - 0.250000000000000000000D0 * sigmaaa * t29
+-      t33 = t8 ** (0.1D1 / 0.3D1)
+-      t34 = t33 ** 2
+-      t35 = 0.1D1 / t34
+-      t36 = t32 * t35
+-      t37 = rhoa ** (0.1D1 / 0.3D1)
+-      t38 = t37 ** 2
+-      t40 = 0.1D1 / t38 / rhoa
+-      t41 = t36 * t40
+-      t43 = 0.1D1 - 0.504755720231149905248D0 * t41
+-      t44 = t43 ** 2
+-      t46 = exp(-0.5D0 * t44)
+-      t49 = 0.118591405585874358362D-1 * t18 + 0.120830459735945720683D0
+-     # * t43 * t46
++      t19 = paramscanxmuak ** 2
++      t20 = 0.1D1 / paramscanxk1
++      t21 = t19 * t20
++      t22 = t21 - 0.112654320987654320988D0
++      t23 = t22 * sigmaaa
++      t24 = t23 * t15
++      t25 = 0.1D1 / paramscanxmuak
++      t26 = t17 * t25
++      t29 = abs(-0.1D1 * t21 + 0.112654320987654320988D0)
++      t30 = t29 * sigmaaa
++      t34 = exp(-0.757133580346724857871D-1 * t30 * t18 * t25)
++      t35 = t26 * t34
++      t38 = 0.1D1 + 0.757133580346724857871D-1 * t24 * t35
++      t42 = sigmaaa * t15
++      t45 = 0.1D1 / rhoa
++      t48 = taua - 0.250000000000000000000D0 * sigmaaa * t45
++      t49 = t8 ** (0.1D1 / 0.3D1)
+       t50 = t49 ** 2
+-      t52 = 0.1D1 + 0.143805048498903106908D0 * t15 * t25 + 0.1538461538
+-     #46153846154D2 * t50
+-      t54 = 0.65D-1 / t52
+-      t55 = 0.1D1 / t43
+-      t56 = t40 * t55
+-      t59 = tanh(0.504755720231149905248D30 * t36 * t56)
+-      t61 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t59
+-      t65 = exp(-0.336672065394176986800D0 * t36 * t56 * t61)
+-      t68 = tanh(0.1D31 - 0.504755720231149905248D30 * t41)
+-      t69 = 0.500000000000000000000D0 * t68
+-      t70 = 0.500000000000000000000D0 + t69
+-      t73 = tanh(0.1D31 * t55)
+-      t75 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t73
+-      t78 = exp(0.8D0 * t55 * t75)
+-      t79 = 0.500000000000000000000D0 - t69
+-      t82 = t65 * t70 - 0.124D1 * t78 * t79
+-      t83 = 0.109D0 + t54
+-      t85 = 0.1065D1 - t54 + t82 * t83
+-      t86 = t12 * t85
+-      t87 = sqrt(sigmaaa)
+-      t89 = t87 / t10
+-      t90 = t89 * t29
+-      t91 = sqrt(t90)
+-      t94 = exp(-0.943252112663908494661D1 / t91)
+-      t96 = 0.1D1 - 0.1D1 * t94
+-      t100 = t8 * rhob
+-      t101 = t100 ** (0.1D1 / 0.3D1)
+-      t102 = rhob * t101
+-      t103 = t101 ** 2
+-      t104 = 0.1D1 / t103
+-      t105 = sigmabb * t104
+-      t106 = rhob ** 2
+-      t107 = 0.1D1 / t106
+-      t108 = t105 * t107
+-      t110 = exp(-0.747166092922644636268D-1 * t108)
+-      t111 = t107 * t110
+-      t114 = 0.1D1 + 0.747166092922644636268D-1 * t105 * t111
+-      t115 = t107 * t114
+-      t119 = 0.1D1 / rhob
+-      t122 = taub - 0.250000000000000000000D0 * sigmabb * t119
+-      t123 = t122 * t35
+-      t124 = rhob ** (0.1D1 / 0.3D1)
+-      t125 = t124 ** 2
+-      t127 = 0.1D1 / t125 / rhob
+-      t128 = t123 * t127
+-      t130 = 0.1D1 - 0.504755720231149905248D0 * t128
+-      t131 = t130 ** 2
+-      t133 = exp(-0.5D0 * t131)
+-      t136 = 0.118591405585874358362D-1 * t108 + 0.120830459735945720683
+-     #D0 * t130 * t133
+-      t137 = t136 ** 2
+-      t139 = 0.1D1 + 0.143805048498903106908D0 * t105 * t115 + 0.1538461
+-     #53846153846154D2 * t137
+-      t141 = 0.65D-1 / t139
+-      t142 = 0.1D1 / t130
+-      t143 = t127 * t142
+-      t146 = tanh(0.504755720231149905248D30 * t123 * t143)
+-      t148 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t14
++      t51 = 0.1D1 / t50
++      t52 = t48 * t51
++      t53 = rhoa ** (0.1D1 / 0.3D1)
++      t54 = t53 ** 2
++      t56 = 0.1D1 / t54 / rhoa
++      t57 = t52 * t56
++      t59 = 0.1D1 - 0.504755720231149905248D0 * t57
++      t60 = t59 ** 2
++      t62 = exp(-0.5D0 * t60)
++      t65 = 0.118591405585874358362D-1 * t42 * t17 + 0.12083045973594572
++     #0683D0 * t59 * t62
++      t66 = t65 ** 2
++      t69 = 0.1D1 + (0.757133580346724857871D-1 * t13 * t18 * t38 + t66)
++     # * t20
++      t71 = paramscanxk1 / t69
++      t73 = paramscanxc1x * t48
++      t74 = t73 * t51
++      t75 = 0.1D1 / t59
++      t76 = t56 * t75
++      t79 = tanh(0.504755720231149905248D30 * t52 * t76)
++      t81 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t79
++      t82 = t76 * t81
++      t85 = exp(-0.504755720231149905248D0 * t74 * t82)
++      t88 = tanh(0.1D31 - 0.504755720231149905248D30 * t57)
++      t89 = 0.500000000000000000000D0 * t88
++      t90 = 0.500000000000000000000D0 + t89
++      t94 = tanh(0.1D31 * t75)
++      t96 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t94
++      t98 = exp(paramscanxc2x * t75 * t96)
++      t99 = paramscanxdx * t98
++      t100 = 0.500000000000000000000D0 - t89
++      t103 = t85 * t90 - 0.1D1 * t99 * t100
++      t104 = 0.1D1 * paramscanxk1
++      t105 = paramscanxhx0 - 0.1D1 - t104 + t71
++      t107 = 0.1D1 + paramscanxk1 - 0.1D1 * t71 + t103 * t105
++      t108 = t12 * t107
++      t109 = sqrt(sigmaaa)
++      t111 = t109 / t10
++      t112 = t111 * t45
++      t113 = sqrt(t112)
++      t117 = exp(-0.190636858599387314752D1 * paramscanxa1 / t113)
++      t119 = 0.1D1 - 0.1D1 * t117
++      t123 = t8 * rhob
++      t124 = t123 ** (0.1D1 / 0.3D1)
++      t125 = rhob * t124
++      t126 = paramscanxmuak * sigmabb
++      t127 = t124 ** 2
++      t128 = 0.1D1 / t127
++      t129 = rhob ** 2
++      t130 = 0.1D1 / t129
++      t131 = t128 * t130
++      t132 = t22 * sigmabb
++      t133 = t132 * t128
++      t134 = t130 * t25
++      t135 = t29 * sigmabb
++      t139 = exp(-0.757133580346724857871D-1 * t135 * t131 * t25)
++      t140 = t134 * t139
++      t143 = 0.1D1 + 0.757133580346724857871D-1 * t133 * t140
++      t147 = sigmabb * t128
++      t150 = 0.1D1 / rhob
++      t153 = taub - 0.250000000000000000000D0 * sigmabb * t150
++      t154 = t153 * t51
++      t155 = rhob ** (0.1D1 / 0.3D1)
++      t156 = t155 ** 2
++      t158 = 0.1D1 / t156 / rhob
++      t159 = t154 * t158
++      t161 = 0.1D1 - 0.504755720231149905248D0 * t159
++      t162 = t161 ** 2
++      t164 = exp(-0.5D0 * t162)
++      t167 = 0.118591405585874358362D-1 * t147 * t130 + 0.12083045973594
++     #5720683D0 * t161 * t164
++      t168 = t167 ** 2
++      t171 = 0.1D1 + (0.757133580346724857871D-1 * t126 * t131 * t143 + 
++     #t168) * t20
++      t173 = paramscanxk1 / t171
++      t175 = paramscanxc1x * t153
++      t176 = t175 * t51
++      t177 = 0.1D1 / t161
++      t178 = t158 * t177
++      t181 = tanh(0.504755720231149905248D30 * t154 * t178)
++      t183 = 0.500000000000000000000D0 + 0.500000000000000000000D0 * t18
++     #1
++      t184 = t178 * t183
++      t187 = exp(-0.504755720231149905248D0 * t176 * t184)
++      t190 = tanh(0.1D31 - 0.504755720231149905248D30 * t159)
++      t191 = 0.500000000000000000000D0 * t190
++      t192 = 0.500000000000000000000D0 + t191
++      t196 = tanh(0.1D31 * t177)
++      t198 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t19
+      #6
+-      t152 = exp(-0.336672065394176986800D0 * t123 * t143 * t148)
+-      t155 = tanh(0.1D31 - 0.504755720231149905248D30 * t128)
+-      t156 = 0.500000000000000000000D0 * t155
+-      t157 = 0.500000000000000000000D0 + t156
+-      t160 = tanh(0.1D31 * t142)
+-      t162 = 0.500000000000000000000D0 - 0.500000000000000000000D0 * t16
+-     #0
+-      t165 = exp(0.8D0 * t142 * t162)
+-      t166 = 0.500000000000000000000D0 - t156
+-      t169 = t152 * t157 - 0.124D1 * t165 * t166
+-      t170 = 0.109D0 + t141
+-      t172 = 0.1065D1 - t141 + t169 * t170
+-      t173 = t12 * t172
+-      t174 = sqrt(sigmabb)
+-      t176 = t174 / t101
+-      t177 = t176 * t119
+-      t178 = sqrt(t177)
+-      t181 = exp(-0.943252112663908494661D1 / t178)
+-      t183 = 0.1D1 - 0.1D1 * t181
+-      zk(i) = -0.136284044462410474417D1 * t11 * t86 * t96 - 0.136284044
+-     #462410474417D1 * t102 * t173 * t183
+-      t197 = t52 ** 2
+-      t198 = 0.1D1 / t197
+-      t201 = sigmaaa / t13 / t9
+-      t205 = t16 * rhoa
+-      t206 = 0.1D1 / t205
+-      t217 = t201 * t17 * t8
+-      t219 = t15 * t206
+-      t234 = sigmaaa / t38 / t205
+-      t235 = t234 * t35
+-      t238 = 0.1D1 / t38 / t16
+-      t239 = t36 * t238
+-      t241 = -0.126188930057787476312D0 * t235 + 0.841259533718583175412
+-     #D0 * t239
+-      t250 = -0.958700323326020712721D-1 * t201 * t25 * t8 - 0.287610096
+-     #997806213817D0 * t15 * t206 * t24 + 0.143805048498903106908D0 * t1
+-     #5 * t17 * (-0.498110728615096424178D-1 * t201 * t21 * t8 - 0.14943
+-     #3218584528927254D0 * t15 * t206 * t20 + 0.747166092922644636268D-1
+-     # * t15 * t17 * (0.498110728615096424178D-1 * t217 + 0.149433218584
+-     #528927254D0 * t219) * t20) + 0.307692307692307692308D2 * t49 * (-0
+-     #.790609370572495722413D-2 * t217 - 0.237182811171748716724D-1 * t2
+-     #19 + 0.120830459735945720683D0 * t241 * t46 - 0.120830459735945720
+-     #683D0 * t44 * t241 * t46)
+-      t253 = t35 * t55
+-      t257 = t238 * t55
+-      t261 = 0.1D1 / t44
+-      t266 = t59 ** 2
+-      t269 = t55 * (0.1D1 - 0.1D1 * t266)
+-      t285 = t68 ** 2
+-      t287 = 0.1D1 - 0.1D1 * t285
+-      t288 = t65 * t287
+-      t291 = -0.126188930057787476312D30 * t235 + 0.84125953371858317541
+-     #2D30 * t239
+-      t294 = t261 * t75
+-      t299 = t73 ** 2
+-      t302 = 0.1D1 / t44 / t43 * (0.1D1 - 0.1D1 * t299)
+-      t309 = t78 * t287
+-      t314 = t82 * t198
+-      t324 = 0.1D1 / t91 / t90
+-      t327 = 0.1D1 / t10 / t9
+-      t348 = t139 ** 2
+-      t349 = 0.1D1 / t348
+-      t352 = sigmabb / t103 / t100
+-      t356 = t106 * rhob
+-      t357 = 0.1D1 / t356
+-      t368 = t352 * t107 * t8
+-      t370 = t105 * t357
+-      t385 = sigmabb / t125 / t356
+-      t386 = t385 * t35
+-      t389 = 0.1D1 / t125 / t106
+-      t390 = t123 * t389
+-      t392 = -0.126188930057787476312D0 * t386 + 0.841259533718583175412
+-     #D0 * t390
+-      t401 = -0.958700323326020712721D-1 * t352 * t115 * t8 - 0.28761009
+-     #6997806213817D0 * t105 * t357 * t114 + 0.143805048498903106908D0 *
+-     # t105 * t107 * (-0.498110728615096424178D-1 * t352 * t111 * t8 - 0
+-     #.149433218584528927254D0 * t105 * t357 * t110 + 0.7471660929226446
+-     #36268D-1 * t105 * t107 * (0.498110728615096424178D-1 * t368 + 0.14
+-     #9433218584528927254D0 * t370) * t110) + 0.307692307692307692308D2 
+-     #* t136 * (-0.790609370572495722413D-2 * t368 - 0.23718281117174871
+-     #6724D-1 * t370 + 0.120830459735945720683D0 * t392 * t133 - 0.12083
+-     #0459735945720683D0 * t131 * t392 * t133)
+-      t404 = t35 * t142
+-      t408 = t389 * t142
+-      t412 = 0.1D1 / t131
+-      t417 = t146 ** 2
+-      t420 = t142 * (0.1D1 - 0.1D1 * t417)
+-      t436 = t155 ** 2
+-      t438 = 0.1D1 - 0.1D1 * t436
+-      t439 = t152 * t438
+-      t442 = -0.126188930057787476312D30 * t386 + 0.84125953371858317541
+-     #2D30 * t390
+-      t445 = t412 * t162
+-      t450 = t160 ** 2
+-      t453 = 0.1D1 / t131 / t130 * (0.1D1 - 0.1D1 * t450)
+-      t460 = t165 * t438
+-      t465 = t169 * t349
+-      t475 = 0.1D1 / t178 / t177
+-      t478 = 0.1D1 / t101 / t100
+-      vrhoc(i) = vrhoc(i) - 0.681420222312052372084D0 * t10 * t12 * t85 
+-     #* t96 - 0.227140074104017457361D0 * rhoa * t14 * pi * t85 * t96 - 
+-     #0.681420222312052372084D0 * t11 * t12 * (0.65D-1 * t198 * t250 + (
+-     #(-0.841680163485442467001D-1 * t234 * t253 * t61 + 0.5611201089902
+-     #94978001D0 * t36 * t257 * t61 + 0.336672065394176986800D0 * t41 * 
+-     #t261 * t61 * t241 - 0.168336032697088493400D0 * t41 * t269 * (0.12
+-     #6188930057787476312D30 * t234 * t253 - 0.841259533718583175412D30 
+-     #* t36 * t257 - 0.504755720231149905248D30 * t36 * t40 * t261 * t24
+-     #1)) * t65 * t70 + 0.500000000000000000000D0 * t288 * t291 - 0.124D
+-     #1 * (-0.8D0 * t294 * t241 + 0.400000000000000000000D30 * t302 * t2
+-     #41) * t78 * t79 + 0.620000000000000000000D0 * t309 * t291) * t83 -
+-     # 0.65D-1 * t314 * t250) * t96 + 0.973296829181994948224D0 * t11 * 
+-     #t12 * t85 * t324 * (-0.110064241629820889462D1 * t87 * t327 * t29 
+-     #* t8 - 0.330192724889462668387D1 * t89 * t17) * t94 - 0.6814202223
+-     #12052372084D0 * t101 * t12 * t172 * t183 - 0.227140074104017457361
+-     #D0 * rhob * t104 * pi * t172 * t183 - 0.681420222312052372084D0 * 
+-     #t102 * t12 * (0.65D-1 * t349 * t401 + ((-0.841680163485442467001D-
+-     #1 * t385 * t404 * t148 + 0.561120108990294978001D0 * t123 * t408 *
+-     # t148 + 0.336672065394176986800D0 * t128 * t412 * t148 * t392 - 0.
+-     #168336032697088493400D0 * t128 * t420 * (0.126188930057787476312D3
+-     #0 * t385 * t404 - 0.841259533718583175412D30 * t123 * t408 - 0.504
+-     #755720231149905248D30 * t123 * t127 * t412 * t392)) * t152 * t157 
+-     #+ 0.500000000000000000000D0 * t439 * t442 - 0.124D1 * (-0.8D0 * t4
+-     #45 * t392 + 0.400000000000000000000D30 * t453 * t392) * t165 * t16
+-     #6 + 0.620000000000000000000D0 * t460 * t442) * t170 - 0.65D-1 * t4
+-     #65 * t401) * t183 + 0.973296829181994948224D0 * t102 * t12 * t172 
+-     #* t475 * (-0.110064241629820889462D1 * t174 * t478 * t119 * t8 - 0
+-     #.330192724889462668387D1 * t176 * t107) * t181
+-      t491 = t14 * t17
+-      t497 = t16 ** 2
+-      t507 = t238 * t35
+-      t517 = 0.143805048498903106908D0 * t491 * t24 + 0.1438050484989031
+-     #06908D0 * t15 * t17 * (0.747166092922644636268D-1 * t491 * t20 - 0
+-     #.558257170413290039222D-2 * sigmaaa * t327 / t497 * t20) + 0.30769
+-     #2307692307692308D2 * t49 * (0.118591405585874358362D-1 * t491 + 0.
+-     #152474664324695603608D-1 * t507 * t46 - 0.152474664324695603608D-1
+-     # * t44 * t238 * t35 * t46)
+-      t520 = t55 * t61
+-      t524 = 0.1D1 / t33 / t8
+-      t525 = t32 * t524
+-      t528 = 0.1D1 / t37 / t497 * t261
+-      t569 = t104 * t107
+-      t575 = t106 ** 2
+-      t585 = t389 * t35
+-      t595 = 0.143805048498903106908D0 * t569 * t114 + 0.143805048498903
+-     #106908D0 * t105 * t107 * (0.747166092922644636268D-1 * t569 * t110
+-     # - 0.558257170413290039222D-2 * sigmabb * t478 / t575 * t110) + 0.
+-     #307692307692307692308D2 * t136 * (0.118591405585874358362D-1 * t56
+-     #9 + 0.152474664324695603608D-1 * t585 * t133 - 0.15247466432469560
+-     #3608D-1 * t131 * t389 * t35 * t133)
+-      t598 = t142 * t148
+-      t601 = t122 * t524
+-      t604 = 0.1D1 / t124 / t575 * t412
++      t200 = exp(paramscanxc2x * t177 * t198)
++      t201 = paramscanxdx * t200
++      t202 = 0.500000000000000000000D0 - t191
++      t205 = t187 * t192 - 0.1D1 * t201 * t202
++      t206 = paramscanxhx0 - 0.1D1 - t104 + t173
++      t208 = 0.1D1 + paramscanxk1 - 0.1D1 * t173 + t205 * t206
++      t209 = t12 * t208
++      t210 = sqrt(sigmabb)
++      t212 = t210 / t124
++      t213 = t212 * t150
++      t214 = sqrt(t213)
++      t218 = exp(-0.190636858599387314752D1 * paramscanxa1 / t214)
++      t220 = 0.1D1 - 0.1D1 * t218
++      zk(i) = -0.136284044462410474417D1 * t11 * t108 * t119 - 0.1362840
++     #44462410474417D1 * t125 * t209 * t220
++      t234 = t69 ** 2
++      t235 = 0.1D1 / t234
++      t237 = 0.1D1 / t14 / t9
++      t239 = t17 * t38
++      t243 = t16 * rhoa
++      t244 = 0.1D1 / t243
++      t245 = t15 * t244
++      t281 = 0.1D1 / t54 / t243
++      t282 = sigmaaa * t281
++      t283 = t282 * t51
++      t286 = 0.1D1 / t54 / t16
++      t287 = t52 * t286
++      t289 = -0.126188930057787476312D0 * t283 + 0.841259533718583175412
++     #D0 * t287
++      t298 = -0.504755720231149905248D-1 * t13 * t237 * t239 * t8 - 0.15
++     #1426716069344971574D0 * t13 * t245 * t38 + 0.757133580346724857871
++     #D-1 * t13 * t18 * (-0.504755720231149905248D-1 * t23 * t237 * t26 
++     #* t34 * t8 - 0.151426716069344971574D0 * t24 * t244 * t25 * t34 + 
++     #0.757133580346724857871D-1 * t24 * t26 * (0.504755720231149905248D
++     #-1 * t30 * t237 * t26 * t8 + 0.151426716069344971574D0 * t30 * t24
++     #5 * t25) * t34) + 0.2D1 * t65 * (-0.790609370572495722413D-2 * sig
++     #maaa * t237 * t17 * t8 - 0.237182811171748716724D-1 * t42 * t244 +
++     # 0.120830459735945720683D0 * t289 * t62 - 0.120830459735945720683D
++     #0 * t60 * t289 * t62)
++      t302 = t51 * t75
++      t303 = t302 * t81
++      t306 = t286 * t75
++      t310 = 0.1D1 / t60
++      t311 = t56 * t310
++      t316 = t79 ** 2
++      t318 = 0.1D1 - 0.1D1 * t316
++      t334 = t88 ** 2
++      t336 = 0.1D1 - 0.1D1 * t334
++      t337 = t85 * t336
++      t340 = -0.126188930057787476312D30 * t283 + 0.84125953371858317541
++     #2D30 * t287
++      t343 = paramscanxc2x * t310
++      t349 = paramscanxc2x / t60 / t59
++      t350 = t94 ** 2
++      t352 = 0.1D1 - 0.1D1 * t350
++      t358 = t98 * t100
++      t366 = t103 * t235
++      t376 = 0.1D1 / t113 / t112
++      t379 = 0.1D1 / t10 / t9
++      t400 = t171 ** 2
++      t401 = 0.1D1 / t400
++      t403 = 0.1D1 / t127 / t123
++      t405 = t130 * t143
++      t409 = t129 * rhob
++      t410 = 0.1D1 / t409
++      t411 = t128 * t410
++      t447 = 0.1D1 / t156 / t409
++      t448 = sigmabb * t447
++      t449 = t448 * t51
++      t452 = 0.1D1 / t156 / t129
++      t453 = t154 * t452
++      t455 = -0.126188930057787476312D0 * t449 + 0.841259533718583175412
++     #D0 * t453
++      t464 = -0.504755720231149905248D-1 * t126 * t403 * t405 * t8 - 0.1
++     #51426716069344971574D0 * t126 * t411 * t143 + 0.757133580346724857
++     #871D-1 * t126 * t131 * (-0.504755720231149905248D-1 * t132 * t403 
++     #* t134 * t139 * t8 - 0.151426716069344971574D0 * t133 * t410 * t25
++     # * t139 + 0.757133580346724857871D-1 * t133 * t134 * (0.5047557202
++     #31149905248D-1 * t135 * t403 * t134 * t8 + 0.151426716069344971574
++     #D0 * t135 * t411 * t25) * t139) + 0.2D1 * t167 * (-0.7906093705724
++     #95722413D-2 * sigmabb * t403 * t130 * t8 - 0.237182811171748716724
++     #D-1 * t147 * t410 + 0.120830459735945720683D0 * t455 * t164 - 0.12
++     #0830459735945720683D0 * t162 * t455 * t164)
++      t468 = t51 * t177
++      t469 = t468 * t183
++      t472 = t452 * t177
++      t476 = 0.1D1 / t162
++      t477 = t158 * t476
++      t482 = t181 ** 2
++      t484 = 0.1D1 - 0.1D1 * t482
++      t500 = t190 ** 2
++      t502 = 0.1D1 - 0.1D1 * t500
++      t503 = t187 * t502
++      t506 = -0.126188930057787476312D30 * t449 + 0.84125953371858317541
++     #2D30 * t453
++      t509 = paramscanxc2x * t476
++      t515 = paramscanxc2x / t162 / t161
++      t516 = t196 ** 2
++      t518 = 0.1D1 - 0.1D1 * t516
++      t524 = t200 * t202
++      t532 = t205 * t401
++      t542 = 0.1D1 / t214 / t213
++      t545 = 0.1D1 / t124 / t123
++      vrhoc(i) = vrhoc(i) - 0.681420222312052372084D0 * t10 * t12 * t107
++     # * t119 - 0.227140074104017457361D0 * rhoa * t15 * pi * t107 * t11
++     #9 - 0.681420222312052372084D0 * t11 * t12 * (t235 * t298 + ((-0.12
++     #6188930057787476312D0 * paramscanxc1x * sigmaaa * t281 * t303 + 0.
++     #841259533718583175412D0 * t74 * t306 * t81 + 0.5047557202311499052
++     #48D0 * t74 * t311 * t81 * t289 - 0.252377860115574952624D0 * t74 *
++     # t76 * t318 * (0.126188930057787476312D30 * t282 * t302 - 0.841259
++     #533718583175412D30 * t52 * t306 - 0.504755720231149905248D30 * t52
++     # * t311 * t289)) * t85 * t90 + 0.500000000000000000000D0 * t337 * 
++     #t340 - 0.1D1 * paramscanxdx * (-0.1D1 * t343 * t96 * t289 + 0.5000
++     #00000000000000000D30 * t349 * t352 * t289) * t358 + 0.500000000000
++     #000000000D0 * t99 * t336 * t340) * t105 - 0.1D1 * t366 * t298) * t
++     #119 + 0.196709074391559034787D0 * t11 * t108 * paramscanxa1 * t376
++     # * (-0.110064241629820889462D1 * t109 * t379 * t45 * t8 - 0.330192
++     #724889462668387D1 * t111 * t17) * t117 - 0.681420222312052372084D0
++     # * t124 * t12 * t208 * t220 - 0.227140074104017457361D0 * rhob * t
++     #128 * pi * t208 * t220 - 0.681420222312052372084D0 * t125 * t12 * 
++     #(t401 * t464 + ((-0.126188930057787476312D0 * paramscanxc1x * sigm
++     #abb * t447 * t469 + 0.841259533718583175412D0 * t176 * t472 * t183
++     # + 0.504755720231149905248D0 * t176 * t477 * t183 * t455 - 0.25237
++     #7860115574952624D0 * t176 * t178 * t484 * (0.126188930057787476312
++     #D30 * t448 * t468 - 0.841259533718583175412D30 * t154 * t472 - 0.5
++     #04755720231149905248D30 * t154 * t477 * t455)) * t187 * t192 + 0.5
++     #00000000000000000000D0 * t503 * t506 - 0.1D1 * paramscanxdx * (-0.
++     #1D1 * t509 * t198 * t455 + 0.500000000000000000000D30 * t515 * t51
++     #8 * t455) * t524 + 0.500000000000000000000D0 * t201 * t502 * t506)
++     # * t206 - 0.1D1 * t532 * t464) * t220 + 0.196709074391559034787D0 
++     #* t125 * t209 * paramscanxa1 * t542 * (-0.110064241629820889462D1 
++     #* t210 * t545 * t150 * t8 - 0.330192724889462668387D1 * t212 * t13
++     #0) * t218
++      t565 = t16 ** 2
++      t567 = 0.1D1 / t19
++      t578 = t286 * t51
++      t588 = 0.757133580346724857871D-1 * paramscanxmuak * t15 * t239 + 
++     #0.757133580346724857871D-1 * t13 * t18 * (0.757133580346724857871D
++     #-1 * t22 * t15 * t35 - 0.573251258488650465949D-2 * t23 * t379 / t
++     #565 * t567 * t29 * t34) + 0.2D1 * t65 * (0.118591405585874358362D-
++     #1 * t18 + 0.152474664324695603608D-1 * t578 * t62 - 0.152474664324
++     #695603608D-1 * t60 * t286 * t51 * t62)
++      t594 = 0.1D1 / t49 / t8
++      t595 = t73 * t594
++      t598 = 0.1D1 / t53 / t565 * t310
++      t604 = t48 * t594
++      t655 = t129 ** 2
++      t667 = t452 * t51
++      t677 = 0.757133580346724857871D-1 * paramscanxmuak * t128 * t405 +
++     # 0.757133580346724857871D-1 * t126 * t131 * (0.7571335803467248578
++     #71D-1 * t22 * t128 * t140 - 0.573251258488650465949D-2 * t132 * t5
++     #45 / t655 * t567 * t29 * t139) + 0.2D1 * t167 * (0.118591405585874
++     #358362D-1 * t131 + 0.152474664324695603608D-1 * t667 * t164 - 0.15
++     #2474664324695603608D-1 * t162 * t452 * t51 * t164)
++      t682 = t175 * t594
++      t685 = 0.1D1 / t155 / t655 * t476
++      t691 = t153 * t594
+       vsigmacc(i) = vsigmacc(i) - 0.340710111156026186042D0 * t11 * t12 
+-     #* (0.65D-1 * t198 * t517 + ((0.841680163485442467001D-1 * t507 * t
+-     #520 + 0.424842877124366511988D-1 * t525 * t528 * t61 - 0.168336032
+-     #697088493400D0 * t41 * t269 * (-0.126188930057787476312D30 * t507 
+-     #* t55 - 0.636945842765167184389D29 * t525 * t528)) * t65 * t70 + 0
+-     #.630944650288937381559D29 * t288 * t507 - 0.124D1 * (-0.1009511440
+-     #46229981050D0 * t294 * t507 + 0.504755720231149905248D29 * t302 * 
+-     #t507) * t78 * t79 + 0.782371366358282353132D29 * t309 * t507) * t8
+-     #3 - 0.65D-1 * t314 * t517) * t96 + 0.803438830384691996314D0 * t86
+-     # * t324 / t87 * t94 - 0.340710111156026186042D0 * t102 * t12 * (0.
+-     #65D-1 * t349 * t595 + ((0.841680163485442467001D-1 * t585 * t598 +
+-     # 0.424842877124366511988D-1 * t601 * t604 * t148 - 0.1683360326970
+-     #88493400D0 * t128 * t420 * (-0.126188930057787476312D30 * t585 * t
+-     #142 - 0.636945842765167184389D29 * t601 * t604)) * t152 * t157 + 0
+-     #.630944650288937381559D29 * t439 * t585 - 0.124D1 * (-0.1009511440
+-     #46229981050D0 * t445 * t585 + 0.504755720231149905248D29 * t453 * 
+-     #t585) * t165 * t166 + 0.782371366358282353132D29 * t460 * t585) * 
+-     #t170 - 0.65D-1 * t465 * t595) * t183 + 0.803438830384691996314D0 *
+-     # t173 * t475 / t174 * t181
+-      t647 = t35 * t40
+-      t654 = -0.609898657298782414434D-1 * t647 * t46 + 0.60989865729878
+-     #2414434D-1 * t44 * t35 * t40 * t46
+-      t661 = 0.1D1 / t37 / t205 * t261
+-      t699 = t35 * t127
+-      t706 = -0.609898657298782414434D-1 * t699 * t133 + 0.6098986572987
+-     #82414434D-1 * t131 * t35 * t127 * t133
+-      t713 = 0.1D1 / t124 / t356 * t412
++     #* (t235 * t588 + ((0.126188930057787476312D0 * paramscanxc1x * t28
++     #6 * t303 + 0.636945842765167184389D-1 * t595 * t598 * t81 - 0.2523
++     #77860115574952624D0 * t74 * t76 * t318 * (-0.126188930057787476312
++     #D30 * t578 * t75 - 0.636945842765167184389D29 * t604 * t598)) * t8
++     #5 * t90 + 0.630944650288937381559D29 * t337 * t578 - 0.1D1 * param
++     #scanxdx * (-0.126188930057787476312D0 * t343 * t96 * t286 * t51 + 
++     #0.630944650288937381559D29 * t349 * t352 * t286 * t51) * t358 + 0.
++     #630944650288937381559D29 * t99 * t336 * t286 * t51) * t105 - 0.1D1
++     # * t366 * t588) * t119 + 0.162379763209582246269D0 * t108 * params
++     #canxa1 * t376 / t109 * t117 - 0.340710111156026186042D0 * t125 * t
++     #12 * (t401 * t677 + ((0.126188930057787476312D0 * paramscanxc1x * 
++     #t452 * t469 + 0.636945842765167184389D-1 * t682 * t685 * t183 - 0.
++     #252377860115574952624D0 * t176 * t178 * t484 * (-0.126188930057787
++     #476312D30 * t667 * t177 - 0.636945842765167184389D29 * t691 * t685
++     #)) * t187 * t192 + 0.630944650288937381559D29 * t503 * t667 - 0.1D
++     #1 * paramscanxdx * (-0.126188930057787476312D0 * t509 * t198 * t45
++     #2 * t51 + 0.630944650288937381559D29 * t515 * t518 * t452 * t51) *
++     # t524 + 0.630944650288937381559D29 * t201 * t502 * t452 * t51) * t
++     #206 - 0.1D1 * t532 * t677) * t220 + 0.162379763209582246269D0 * t2
++     #09 * paramscanxa1 * t542 / t210 * t218
++      t737 = t51 * t56
++      t744 = -0.609898657298782414434D-1 * t737 * t62 + 0.60989865729878
++     #2414434D-1 * t60 * t51 * t56 * t62
++      t747 = paramscanxc1x * t51
++      t752 = 0.1D1 / t53 / t243 * t310
++      t797 = t51 * t158
++      t804 = -0.609898657298782414434D-1 * t797 * t164 + 0.6098986572987
++     #82414434D-1 * t162 * t51 * t158 * t164
++      t811 = 0.1D1 / t155 / t409 * t476
+       vtauc(i) = vtauc(i) - 0.681420222312052372084D0 * t11 * t12 * (0.2
+-     #00000000000000000000D1 * t198 * t49 * t654 + ((-0.3366720653941769
+-     #86800D0 * t647 * t520 - 0.169937150849746604795D0 * t525 * t661 * 
+-     #t61 - 0.168336032697088493400D0 * t41 * t269 * (0.5047557202311499
+-     #05248D30 * t647 * t55 + 0.254778337106066873756D30 * t525 * t661))
+-     # * t65 * t70 - 0.252377860115574952624D30 * t288 * t647 - 0.124D1 
+-     #* (0.403804576184919924197D0 * t294 * t647 - 0.2019022880924599620
+-     #99D30 * t302 * t647) * t78 * t79 - 0.312948546543312941253D30 * t3
+-     #09 * t647) * t83 - 0.200000000000000000000D1 * t314 * t49 * t654) 
+-     #* t96 - 0.681420222312052372084D0 * t102 * t12 * (0.20000000000000
+-     #0000000D1 * t349 * t136 * t706 + ((-0.336672065394176986800D0 * t6
+-     #99 * t598 - 0.169937150849746604795D0 * t601 * t713 * t148 - 0.168
+-     #336032697088493400D0 * t128 * t420 * (0.504755720231149905248D30 *
+-     # t699 * t142 + 0.254778337106066873756D30 * t601 * t713)) * t152 *
+-     # t157 - 0.252377860115574952624D30 * t439 * t699 - 0.124D1 * (0.40
+-     #3804576184919924197D0 * t445 * t699 - 0.201902288092459962099D30 *
+-     # t453 * t699) * t165 * t166 - 0.312948546543312941253D30 * t460 * 
+-     #t699) * t170 - 0.200000000000000000000D1 * t465 * t136 * t706) * t
+-     #183
+-
++     #D1 * t235 * t65 * t744 + ((-0.504755720231149905248D0 * t747 * t82
++     # - 0.254778337106066873756D0 * t595 * t752 * t81 - 0.2523778601155
++     #74952624D0 * t74 * t76 * t318 * (0.504755720231149905248D30 * t737
++     # * t75 + 0.254778337106066873756D30 * t604 * t752)) * t85 * t90 - 
++     #0.252377860115574952624D30 * t337 * t737 - 0.1D1 * paramscanxdx * 
++     #(0.504755720231149905248D0 * t343 * t96 * t51 * t56 - 0.2523778601
++     #15574952624D30 * t349 * t352 * t51 * t56) * t358 - 0.2523778601155
++     #74952624D30 * t99 * t336 * t51 * t56) * t105 - 0.2D1 * t366 * t65 
++     #* t744) * t119 - 0.681420222312052372084D0 * t125 * t12 * (0.2D1 *
++     # t401 * t167 * t804 + ((-0.504755720231149905248D0 * t747 * t184 -
++     # 0.254778337106066873756D0 * t682 * t811 * t183 - 0.25237786011557
++     #4952624D0 * t176 * t178 * t484 * (0.504755720231149905248D30 * t79
++     #7 * t177 + 0.254778337106066873756D30 * t691 * t811)) * t187 * t19
++     #2 - 0.252377860115574952624D30 * t503 * t797 - 0.1D1 * paramscanxd
++     #x * (0.504755720231149905248D0 * t509 * t198 * t51 * t158 - 0.2523
++     #77860115574952624D30 * t515 * t518 * t51 * t158) * t524 - 0.252377
++     #860115574952624D30 * t201 * t502 * t51 * t158) * t206 - 0.2D1 * t5
++     #32 * t167 * t804) * t220
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -4517,84 +4610,97 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+       t8 = pi ** 2
+       t10 = (t8 * rhoa) ** (0.1D1 / 0.3D1)
+       t12 = 0.1D1 / pi
+-      t13 = t10 ** 2
+-      t15 = sigmaaa / t13
++      t14 = t10 ** 2
++      t15 = 0.1D1 / t14
+       t16 = rhoa ** 2
+       t17 = 0.1D1 / t16
+       t18 = t15 * t17
+-      t20 = exp(-0.747166092922644636268D-1 * t18)
+-      t29 = 0.1D1 / rhoa
+-      t33 = t8 ** (0.1D1 / 0.3D1)
+-      t34 = t33 ** 2
+-      t35 = 0.1D1 / t34
+-      t36 = (taua - 0.250000000000000000000D0 * sigmaaa * t29) * t35
+-      t37 = rhoa ** (0.1D1 / 0.3D1)
+-      t38 = t37 ** 2
+-      t40 = 0.1D1 / t38 / rhoa
+-      t41 = t36 * t40
+-      t43 = 0.1D1 - 0.504755720231149905248D0 * t41
+-      t44 = t43 ** 2
+-      t46 = exp(-0.5D0 * t44)
+-      t50 = (0.118591405585874358362D-1 * t18 + 0.120830459735945720683D
+-     #0 * t43 * t46) ** 2
+-      t54 = 0.65D-1 / (0.1D1 + 0.143805048498903106908D0 * t15 * t17 * (
+-     #0.1D1 + 0.747166092922644636268D-1 * t15 * t17 * t20) + 0.15384615
+-     #3846153846154D2 * t50)
+-      t55 = 0.1D1 / t43
+-      t56 = t40 * t55
+-      t59 = tanh(0.504755720231149905248D30 * t36 * t56)
+-      t65 = exp(-0.336672065394176986800D0 * t36 * t56 * (0.500000000000
+-     #000000000D0 + 0.500000000000000000000D0 * t59))
+-      t68 = tanh(0.1D31 - 0.504755720231149905248D30 * t41)
+-      t69 = 0.500000000000000000000D0 * t68
+-      t73 = tanh(0.1D31 * t55)
+-      t78 = exp(0.8D0 * t55 * (0.500000000000000000000D0 - 0.50000000000
+-     #0000000000D0 * t73))
+-      t87 = sqrt(sigmaaa)
+-      t91 = sqrt(t87 / t10 * t29)
+-      t94 = exp(-0.943252112663908494661D1 / t91)
+-      t101 = (t8 * rhob) ** (0.1D1 / 0.3D1)
+-      t103 = t101 ** 2
+-      t105 = sigmabb / t103
+-      t106 = rhob ** 2
+-      t107 = 0.1D1 / t106
+-      t108 = t105 * t107
+-      t110 = exp(-0.747166092922644636268D-1 * t108)
+-      t119 = 0.1D1 / rhob
+-      t123 = (taub - 0.250000000000000000000D0 * sigmabb * t119) * t35
+-      t124 = rhob ** (0.1D1 / 0.3D1)
+-      t125 = t124 ** 2
+-      t127 = 0.1D1 / t125 / rhob
+-      t128 = t123 * t127
+-      t130 = 0.1D1 - 0.504755720231149905248D0 * t128
+-      t131 = t130 ** 2
+-      t133 = exp(-0.5D0 * t131)
+-      t137 = (0.118591405585874358362D-1 * t108 + 0.12083045973594572068
+-     #3D0 * t130 * t133) ** 2
+-      t141 = 0.65D-1 / (0.1D1 + 0.143805048498903106908D0 * t105 * t107 
+-     #* (0.1D1 + 0.747166092922644636268D-1 * t105 * t107 * t110) + 0.15
+-     #3846153846153846154D2 * t137)
+-      t142 = 0.1D1 / t130
+-      t143 = t127 * t142
+-      t146 = tanh(0.504755720231149905248D30 * t123 * t143)
+-      t152 = exp(-0.336672065394176986800D0 * t123 * t143 * (0.500000000
+-     #000000000000D0 + 0.500000000000000000000D0 * t146))
+-      t155 = tanh(0.1D31 - 0.504755720231149905248D30 * t128)
+-      t156 = 0.500000000000000000000D0 * t155
+-      t160 = tanh(0.1D31 * t142)
+-      t165 = exp(0.8D0 * t142 * (0.500000000000000000000D0 - 0.500000000
+-     #000000000000D0 * t160))
+-      t174 = sqrt(sigmabb)
+-      t178 = sqrt(t174 / t101 * t119)
+-      t181 = exp(-0.943252112663908494661D1 / t178)
+-      zk(i) = -0.136284044462410474417D1 * rhoa * t10 * t12 * (0.1065D1 
+-     #- t54 + (t65 * (0.500000000000000000000D0 + t69) - 0.124D1 * t78 *
+-     # (0.500000000000000000000D0 - t69)) * (0.109D0 + t54)) * (0.1D1 - 
+-     #0.1D1 * t94) - 0.136284044462410474417D1 * rhob * t101 * t12 * (0.
+-     #1065D1 - t141 + (t152 * (0.500000000000000000000D0 + t156) - 0.124
+-     #D1 * t165 * (0.500000000000000000000D0 - t156)) * (0.109D0 + t141)
+-     #) * (0.1D1 - 0.1D1 * t181)
+-
++      t19 = paramscanxmuak ** 2
++      t20 = 0.1D1 / paramscanxk1
++      t21 = t19 * t20
++      t22 = t21 - 0.112654320987654320988D0
++      t25 = 0.1D1 / paramscanxmuak
++      t29 = abs(-0.1D1 * t21 + 0.112654320987654320988D0)
++      t34 = exp(-0.757133580346724857871D-1 * t29 * sigmaaa * t18 * t25)
++      t45 = 0.1D1 / rhoa
++      t48 = taua - 0.250000000000000000000D0 * sigmaaa * t45
++      t49 = t8 ** (0.1D1 / 0.3D1)
++      t50 = t49 ** 2
++      t51 = 0.1D1 / t50
++      t52 = t48 * t51
++      t53 = rhoa ** (0.1D1 / 0.3D1)
++      t54 = t53 ** 2
++      t56 = 0.1D1 / t54 / rhoa
++      t57 = t52 * t56
++      t59 = 0.1D1 - 0.504755720231149905248D0 * t57
++      t60 = t59 ** 2
++      t62 = exp(-0.5D0 * t60)
++      t66 = (0.118591405585874358362D-1 * sigmaaa * t15 * t17 + 0.120830
++     #459735945720683D0 * t59 * t62) ** 2
++      t71 = paramscanxk1 / (0.1D1 + (0.757133580346724857871D-1 * params
++     #canxmuak * sigmaaa * t18 * (0.1D1 + 0.757133580346724857871D-1 * t
++     #22 * sigmaaa * t15 * t17 * t25 * t34) + t66) * t20)
++      t75 = 0.1D1 / t59
++      t76 = t56 * t75
++      t79 = tanh(0.504755720231149905248D30 * t52 * t76)
++      t85 = exp(-0.504755720231149905248D0 * paramscanxc1x * t48 * t51 *
++     # t76 * (0.500000000000000000000D0 + 0.500000000000000000000D0 * t7
++     #9))
++      t88 = tanh(0.1D31 - 0.504755720231149905248D30 * t57)
++      t89 = 0.500000000000000000000D0 * t88
++      t94 = tanh(0.1D31 * t75)
++      t98 = exp(paramscanxc2x * t75 * (0.500000000000000000000D0 - 0.500
++     #000000000000000000D0 * t94))
++      t104 = 0.1D1 * paramscanxk1
++      t109 = sqrt(sigmaaa)
++      t113 = sqrt(t109 / t10 * t45)
++      t117 = exp(-0.190636858599387314752D1 * paramscanxa1 / t113)
++      t124 = (t8 * rhob) ** (0.1D1 / 0.3D1)
++      t127 = t124 ** 2
++      t128 = 0.1D1 / t127
++      t129 = rhob ** 2
++      t130 = 0.1D1 / t129
++      t131 = t128 * t130
++      t139 = exp(-0.757133580346724857871D-1 * t29 * sigmabb * t131 * t2
++     #5)
++      t150 = 0.1D1 / rhob
++      t153 = taub - 0.250000000000000000000D0 * sigmabb * t150
++      t154 = t153 * t51
++      t155 = rhob ** (0.1D1 / 0.3D1)
++      t156 = t155 ** 2
++      t158 = 0.1D1 / t156 / rhob
++      t159 = t154 * t158
++      t161 = 0.1D1 - 0.504755720231149905248D0 * t159
++      t162 = t161 ** 2
++      t164 = exp(-0.5D0 * t162)
++      t168 = (0.118591405585874358362D-1 * sigmabb * t128 * t130 + 0.120
++     #830459735945720683D0 * t161 * t164) ** 2
++      t173 = paramscanxk1 / (0.1D1 + (0.757133580346724857871D-1 * param
++     #scanxmuak * sigmabb * t131 * (0.1D1 + 0.757133580346724857871D-1 *
++     # t22 * sigmabb * t128 * t130 * t25 * t139) + t168) * t20)
++      t177 = 0.1D1 / t161
++      t178 = t158 * t177
++      t181 = tanh(0.504755720231149905248D30 * t154 * t178)
++      t187 = exp(-0.504755720231149905248D0 * paramscanxc1x * t153 * t51
++     # * t178 * (0.500000000000000000000D0 + 0.500000000000000000000D0 *
++     # t181))
++      t190 = tanh(0.1D31 - 0.504755720231149905248D30 * t159)
++      t191 = 0.500000000000000000000D0 * t190
++      t196 = tanh(0.1D31 * t177)
++      t200 = exp(paramscanxc2x * t177 * (0.500000000000000000000D0 - 0.5
++     #00000000000000000000D0 * t196))
++      t210 = sqrt(sigmabb)
++      t214 = sqrt(t210 / t124 * t150)
++      t218 = exp(-0.190636858599387314752D1 * paramscanxa1 / t214)
++      zk(i) = -0.136284044462410474417D1 * rhoa * t10 * t12 * (0.1D1 + p
++     #aramscanxk1 - 0.1D1 * t71 + (t85 * (0.500000000000000000000D0 + t8
++     #9) - 0.1D1 * paramscanxdx * t98 * (0.500000000000000000000D0 - t89
++     #)) * (paramscanxhx0 - 0.1D1 - t104 + t71)) * (0.1D1 - 0.1D1 * t117
++     #) - 0.136284044462410474417D1 * rhob * t124 * t12 * (0.1D1 + param
++     #scanxk1 - 0.1D1 * t173 + (t187 * (0.500000000000000000000D0 + t191
++     #) - 0.1D1 * paramscanxdx * t200 * (0.500000000000000000000D0 - t19
++     #1)) * (paramscanxhx0 - 0.1D1 - t104 + t173)) * (0.1D1 - 0.1D1 * t2
++     #18)
+              endif
+            enddo
+          endif
+@@ -4606,8 +4712,6 @@ c    Generated: Mon Jun 20 16:05:21 CEST 2016
+ c:SCANXsubrend
+ c:TPSSCsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:25 CEST 2016
+-
+       subroutine dftacg_tpssc
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -4615,7 +4719,8 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -4638,13 +4743,12 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -4782,9 +4886,8 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #00000D0 * t92 * t94 / t287)
+       vtauc(i) = vtauc(i) + t283 + t299
+       vtauo(i) = vtauo(i) - t283 - t299
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -4922,9 +5025,8 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #00000D0 * t92 * t94 / t287)
+       vtauc(i) = vtauc(i) + t283 + t299
+       vtauo(i) = vtauo(i) + t283 + t299
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -5545,7 +5647,6 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #00000000D-1 * t1313 * t341 * t347 - 0.131250000000000000000D0 * t3
+      #42 * t344 / t1319)
+       vtauo(i) = vtauo(i)
+-
+                endif
+              endif
+            enddo
+@@ -5553,13 +5654,12 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -5601,9 +5701,8 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #2500000000000000000D0 * t79 * t81 * t78
+       zk(i) = rhob * t89 * (0.1D1 + 0.437500000000000000000D-1 * t89 * t
+      #60 * sigmabb / t41 / rhob / t80 / taub)
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -5645,9 +5744,8 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #2500000000000000000D0 * t79 * t81 * t78
+       zk(i) = rhoa * t89 * (0.1D1 + 0.437500000000000000000D-1 * t89 * t
+      #60 * sigmaaa / t41 / rhoa / t80 / taua)
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -5808,7 +5906,6 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #) * (-0.3109070D-1 * t281 + 0.153426409720027345292D0 * t321)))
+       zk(i) = rho * t339 * (0.1D1 + 0.437500000000000000000D-1 * t339 * 
+      #t126 * sigma / t61 / rho / t177 / tau)
+-
+                endif
+              endif
+            enddo
+@@ -5818,7 +5915,7 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -6422,14 +6519,13 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+       vtauc(i) = vtauc(i) + rho * t1298 * t342 + t332 * (0.4375000000000
+      #00000000D-1 * t1298 * t333 * t339 - 0.131250000000000000000D0 * t3
+      #34 * t336 / t1304)
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -6587,7 +6683,6 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+      #(-0.3109070D-1 * t273 + 0.153426409720027345292D0 * t313)))
+       zk(i) = rho * t331 * (0.1D1 + 0.437500000000000000000D-1 * t331 * 
+      #t118 * sigma / t53 / rho / t169 / tau)
+-
+              endif
+            enddo
+          endif
+@@ -6599,8 +6694,6 @@ c    Generated: Mon Jun 20 16:05:25 CEST 2016
+ c:TPSSCsubrend
+ c:TPSSXsubrstart
+ 
+-c    Generated: Mon Jun 20 16:05:44 CEST 2016
+-
+       subroutine dftacg_tpssx
+      > (name,fderiv,open,igrad,npt,rhoc,rhoo,
+      >                   sigmacc,sigmaco,sigmaoo,
+@@ -6608,7 +6701,8 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      >                   zk,vrhoc,vrhoo,
+      >                   vsigmacc,vsigmaco,vsigmaoo,
+      >                   vtauc,vtauo,vupsilonc,vupsilono)
+-      implicit double precision (a-h,o-z)
++      use xc_func_params
++      implicit real*8 (r,s,t,u,z,v)
+       logical fderiv,open
+       integer igrad,npt
+       character*(*) name
+@@ -6631,13 +6725,12 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -6789,9 +6882,8 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      # t317 - 0.137750893434399577552D-1 * t317) * t87
+       vtauc(i) = vtauc(i) - t325
+       vtauo(i) = vtauo(i) + t325
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -6943,9 +7035,8 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      # t317 - 0.137750893434399577552D-1 * t317) * t87
+       vtauc(i) = vtauc(i) - t325
+       vtauo(i) = vtauo(i) - t325
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -7236,7 +7327,6 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      # t384 * t623 - 0.137750893434399577552D-1 * t623) * t171
+       vtauc(i) = vtauc(i) - t591 - t631
+       vtauo(i) = vtauo(i) - t591 + t631
+-
+                endif
+              endif
+            enddo
+@@ -7244,13 +7334,12 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             t2 = 0.500000000000000000000D0 * rhoc(i)
++      t2 = 0.500000000000000000000D0 * rhoc(i)
+       t4 = 0.500000000000000000000D0 * rhoo(i)
+       rhoa = max(0.0D0, t2 + t4)
+       rhob = max(0.0D0, t2 - t4)
+-
+                if(rhoa.lt.tol) then
+-             rho = rhob
++      rho = rhob
+       sigmabb = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) - 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -7291,9 +7380,8 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      #21D-1 * t60 - 0.751028806584362139918D-3 * t59 * t71 + 0.108672317
+      #896997724749D-3 * t68 + 0.688754467171997887761D-2 * t24 + 0.14837
+      #4312789351851852D-4 / t13 * t18 * sigmabb / t79) / t86))
+-
+                elseif(rhob.lt.tol) then
+-             rho = rhoa
++      rho = rhoa
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i) + 0.25
+      #0000000000000000000D0 * sigmaoo(i) + 0.500000000000000000000D0 * s
+      #igmaco(i))
+@@ -7334,9 +7422,8 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      #21D-1 * t60 - 0.751028806584362139918D-3 * t59 * t71 + 0.108672317
+      #896997724749D-3 * t68 + 0.688754467171997887761D-2 * t24 + 0.14837
+      #4312789351851852D-4 / t13 * t18 * sigmaaa / t79) / t86))
+-
+                else
+-             rho = rhoa + rhob
++      rho = rhoa + rhob
+       t2 = 0.250000000000000000000D0 * sigmacc(i)
+       t4 = 0.250000000000000000000D0 * sigmaoo(i)
+       t6 = 0.500000000000000000000D0 * sigmaco(i)
+@@ -7417,7 +7504,6 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      #t145 - 0.751028806584362139918D-3 * t144 * t156 + 0.10867231789699
+      #7724749D-3 * t153 + 0.688754467171997887761D-2 * t109 + 0.14837431
+      #2789351851852D-4 * t79 * t103 * sigmabb / t163) / t170))
+-
+                endif
+              endif
+            enddo
+@@ -7427,7 +7513,7 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -7704,14 +7790,13 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      #b * t113 + 0.144197530864197530864D0 * t136 * t605 - 0.75102880658
+      #4362139918D-3 * t605 * t148 + 0.486666666666666666667D0 * t376 * t
+      #610 - 0.137750893434399577552D-1 * t610) * t163
+-
+              endif
+            enddo
+          else
+            do i=1,npt
+              zk(i)=0.0d0
+              if(rhoc(i).gt.tol) then
+-             rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
++      rhoa = max(0.0D0, 0.500000000000000000000D0 * rhoc(i))
+       rhob = rhoa
+       rho = rhoa + rhob
+       sigmaaa = max(0.0D0, 0.250000000000000000000D0 * sigmacc(i))
+@@ -7789,7 +7874,6 @@ c    Generated: Mon Jun 20 16:05:44 CEST 2016
+      #7 - 0.751028806584362139918D-3 * t136 * t148 + 0.10867231789699772
+      #4749D-3 * t145 + 0.688754467171997887761D-2 * t101 + 0.14837431278
+      #9351851852D-4 * t71 * t95 * sigmabb / t155) / t162))
+-
+              endif
+            enddo
+          endif
+diff --git a/xc_dfauto/xc_func_params.f90 b/xc_dfauto/xc_func_params.f90
+new file mode 100644
+index 00000000..4e9d192f
+--- /dev/null
++++ b/xc_dfauto/xc_func_params.f90
+@@ -0,0 +1,39 @@
++module xc_func_params
++
++implicit none
++
++real(8) :: paramscanxk1 = 0.065d0
++real(8) :: paramscanxc1x = 0.667d0
++real(8) :: paramscanxc2x = 0.8d0
++real(8) :: paramscanxdx = 1.24d0
++real(8) :: paramscanxmuak = 10.d0/81.d0
++real(8) :: paramscanxhx0 = 1.174d0
++real(8) :: paramscanxa1 = 4.9479d0;
++
++contains
++
++subroutine set_xc_param(param_name, param_value, icode)
++    character(len=*), intent(in) :: param_name, param_value
++    integer, intent(out) :: icode
++
++    select case (param_name)
++    case ('scanx_k1')
++        read (param_value, *, iostat=icode) paramscanxk1
++    case ('scanx_c1x')
++        read (param_value, *, iostat=icode) paramscanxc1x
++    case ('scanx_c2x')
++        read (param_value, *, iostat=icode) paramscanxc2x
++    case ('scanx_dx')
++        read (param_value, *, iostat=icode) paramscanxdx
++    case ('scanx_muak')
++        read (param_value, *, iostat=icode) paramscanxmuak
++    case ('scanx_hx0')
++        read (param_value, *, iostat=icode) paramscanxhx0
++    case ('scanx_a1')
++        read (param_value, *, iostat=icode) paramscanxa1
++    case default
++        icode = -100
++    end select
++end subroutine
++
++end module

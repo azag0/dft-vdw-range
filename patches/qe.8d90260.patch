@@ -1,0 +1,46 @@
+master: b4908946357c3788b1f86f6ec73b1c7d80ad6b58
+diff --git a/Modules/input_parameters.f90 b/Modules/input_parameters.f90
+index 973d554c0..cd33a9e58 100644
+--- a/Modules/input_parameters.f90
++++ b/Modules/input_parameters.f90
+@@ -580,7 +580,9 @@ MODULE input_parameters
+           ! in rhombohedral axes. If .FALSE. in hexagonal axes, that are
+           ! converted internally in rhombohedral axes.  
+           !
+-
++        REAL(DP) :: VV10_C_value = 0.0093_DP
++        REAL(DP) :: VV10_b_value = 6.3_DP
++          ! values of parameters C and b in the VV10 nonlocal functional
+ 
+         NAMELIST / system / ibrav, celldm, a, b, c, cosab, cosac, cosbc, nat, &
+              ntyp, nbnd, ecutwfc, ecutrho, nr1, nr2, nr3, nr1s, nr2s,         &
+@@ -608,7 +610,8 @@ MODULE input_parameters
+              esm_a, esm_zb, fcp_mu, fcp_mass, fcp_tempw, fcp_relax_step,      &
+              fcp_relax_crit,                                                  &
+              space_group, uniqueb, origin_choice, rhombohedral,               &
+-             zmon, relaxz, block, block_1, block_2, block_height
++             zmon, relaxz, block, block_1, block_2, block_height,             &
++             VV10_C_value, VV10_b_value
+ 
+ !=----------------------------------------------------------------------------=!
+ !  ELECTRONS Namelist Input Parameters
+diff --git a/Modules/xc_rVV10.f90 b/Modules/xc_rVV10.f90
+index 7cfcb9c4c..a5f3afa28 100755
+--- a/Modules/xc_rVV10.f90
++++ b/Modules/xc_rVV10.f90
+@@ -19,14 +19,12 @@ MODULE rVV10
+   USE fft_interfaces,    ONLY : fwfft, invfft 
+   USE control_flags,     ONLY : gamma_only, iverbosity
+   USE io_global,         ONLY : stdout
++  USE input_parameters,  ONLY : b_value => vv10_b_value, C_value => vv10_C_value
+  
+   IMPLICIT NONE
+   
+   real(dp), parameter :: epsr = 1.d-12, epsg = 1.D-10
+ 
+-  real(dp) :: b_value = 6.3_DP
+-  real(dp) :: C_value = 0.0093 
+-
+   private  
+   public :: xc_rVV10,  &
+             interpolate_kernel, &
