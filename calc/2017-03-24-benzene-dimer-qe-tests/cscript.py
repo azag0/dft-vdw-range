@@ -62,7 +62,7 @@ def configure(ctx):
                 basis=basis,
                 pseudo=pp,
                 k_grid=geom.get_kgrid(0.8) if name == 'crystal' else (1, 1, 1),
-                qe_delink='qe.master',
+                qe_delink='qe.8d90260',
                 geom=geom,
                 xc=xc,
             ) * ctx.target(f'{system}/{padding}/{basis}/{pp_name}/{xc_name}/{name}')
