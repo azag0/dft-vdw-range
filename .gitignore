@@ -1,2 +1,3 @@
 *.pyc
 .caf
+/data/*.h5
