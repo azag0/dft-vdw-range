@@ -63,3 +63,6 @@ mol
 FHI-aims
 reparameterize
 noncovalently
+PW86
+reparameterized
+pseudopotentials

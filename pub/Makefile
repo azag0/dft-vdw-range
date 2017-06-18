@@ -7,7 +7,9 @@ revtex: $(BLDDIR)/preprint-revtex.pdf
 
 preprint: $(BLDDIR)/preprint.pdf
 
-all: revtex preprint figs
+suppl: $(BLDDIR)/suppl.pdf
+
+all: revtex preprint suppl figs
 
 figs:
 	@mkdir -p $(BLDDIR)
