@@ -47,14 +47,17 @@
 \addtocounter{footnote}{-1}%
 \endgroup
 
-\section{Computational details}
-
 All resources for the manuscript, including the manuscript itself, can be found in a Git repository~\cite{GitRepo} and related data files~\cite{DataH5,DataCaf}.
 This includes scripts used to generate input files, all inputs and output files, data processing scripts, data, figures, and \LaTeX\ source files.
-Here, we give a summary of the computational protocol.
+The file organization is described in \verb+/README.md+, while here, we summarize the scientifically relevant information and present additional analysis of the data.
 
+\verb+/calc/2017-01-23-all-vdw-sets-3+ and \verb+/calc/2017-04-24-scan-modifications+ contain DFT and van der Waals (vdW) calculations on benchmark sets 3B-69, L7, S12L, S22, S66, X40, X23, and on rare-gas dimers and additional supramolecular complexes.
+\verb+/calc/2017-02-13-graphene-flakes+ contains DFT calculations on the graphene-flake dimers.
 All DFT calculations were done with FHI-aims~\cite{BlumCPC09}, which uses atom-centered basis sets with numerical radial parts.
-We used the \texttt{tight} default basis set and grid settings, which ensure numerical convergence to 0.1\,kcal/mol in binding energies for van der Waals (vdW) systems.
+We used the \verb+tight+ default basis set and grid settings, which ensure numerical convergence to 0.1\,kcal/mol in binding energies for van der Waals (vdW) systems.
+
+The VV10 nonlocal functional was evaluated with Quantum Espresso~\cite{GiannozziJPCM09}, which uses plane-wave basis sets, and so is restricted to periodic boundary conditions only.
+To calculate isolated molecular systems, we used norm-conserving Vanderbilt pseudopotentials~\cite{HamannPRB13}, the plane-wave cutoff of 30\,Ry, and separated the periodic images with 8\,\AA\ of vacuum, which converges vdW binding energies to 0.1\,kcal/mol (Figure~\ref{fig:bz-tests-padding-basis}, \verb+/calc/2017-03-24-benzene-dimer-qe-tests+).
 
 \begin{figure*}
 \includegraphics[center]{../media/bz-tests-padding-basis}
@@ -63,21 +66,15 @@ Text.
 }\label{fig:bz-tests-padding-basis}
 \end{figure*}
 
-The VV10 nonlocal functional was evaluated with Quantum Espresso~\cite{GiannozziJPCM09}, which uses plane-wave basis sets, and so is restricted to periodic boundary conditions only.
-To calculate isolated molecular systems, we used norm-conserving Vanderbilt pseudopotentials~\cite{HamannPRB13}, the plane-wave cutoff of 30\,Ry, and separated the periodic images with 8\,\AA\ of vacuum, which converges vdW binding energies to 0.1\,kcal/mol (Figure~\ref{fig:bz-tests-padding-basis}).
-
 For crystals, $k$-point grids with density of at least 0.8\,\AA\ in reciprocal space were used for all DFT, MBD, and VV10 calculations.
 
 Both VV10 and MBD depend on the electron density, and in principle should be calculated for each density functional separately, but in practice the differences between the densities from different functionals are of the sort that changes the vdW energies only negligibly.
 Therefore, we calculated MBD on PBE densities, and VV10 on the originally suggested combination of reparameterized PW86 exchange and PBE correlation.
 
-All molecular crystal geometries were taken directly from the respective benchmark sets without any relaxation, and can be found in the repository~\cite{GitRepo} or as supplementary data.
-
-\section{Supplementary results}
+All molecular crystal geometries were taken directly from the respective benchmark sets without any relaxation and can be obtained directly from the repository or as supplementary data.
 
 \begin{figure*}
 \includegraphics[center]{../media/3-body}
-
 \caption{\textbf{Distributions of relative errors in 3-body interaction energies on the 3B-69 set.}
 The box-and-whisker plot is of the same kind as Figure 1 in the main text.
 The ``zero hypothesis'' corresponds to a method which always gives zero 3-body interaction energy.
@@ -91,7 +88,7 @@ The reference is a highly accurate empirical potential parametrized on experimen
 }\label{fig:mbd-rare-gas}
 \end{figure*}
 
-Figure~\ref{fig:3-body} shows the errors of density functionals in 3-body interaction energies calculated on the 3B-69 set~\cite{RezacJCTC15}.
+In addition to the analysis in the manuscript, Figure~\ref{fig:3-body} shows the errors of density functionals in 3-body interaction energies calculated on the 3B-69 set~\cite{RezacJCTC15}.
 Figure~\ref{fig:mbd-rare-gas} shows the interaction curves of rare-gas dimers calculated with different density functionals.
 
 \begingroup
