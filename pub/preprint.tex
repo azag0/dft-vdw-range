@@ -21,18 +21,10 @@
 \renewcommand{\captionfont}{\small}
 \renewcommand{\captionlabelfont}{\bfseries}
 
-\usepackage[numbers,sort&compress]{natbib}
-\bibliographystyle{achemso}
-\newcommand\doi[1]{\href{http://dx.doi.org/#1}{\nolinkurl{#1}}}
-\begin{filecontents}{achemso-control.bib}
-@Control{achemso-control,
-  ctrl-article-title  = "no",
-  ctrl-chapter-title  = "yes",
-  ctrl-doi            = "yes",
-  ctrl-etal-number    = "10",
-  ctrl-etal-firstonly = "yes",
-}
-\end{filecontents}
+\usepackage[sort&compress]{natbib}
+\bibliographystyle{abbrvnat}
+\renewcommand\cite{\citep}
+\usepackage{doi}
 
 \input{preamble.tex}
 \input{front-matter.tex}
@@ -73,7 +65,7 @@
 \renewcommand{\section}[2]{}
 \setlength\bibsep{0pt}
 \footnotesize
-\bibliography{refs-zotero,refs,achemso-control}
+\bibliography{refs-zotero,refs}
 \endgroup
 
 \end{document}
