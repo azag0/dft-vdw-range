@@ -34,6 +34,7 @@ def taskgen(ctx, geom, dsname):
                 ('scan', 'dfauto scan', 'tight'),
                 ('scan(a)', 'dfauto scan\nxc_param scanx_c2x 0.3', 'tight'),
                 ('scan(b)', 'dfauto scan\nxc_param scanx_dx 2.0', 'tight'),
+                ('scan(c)', 'dfauto scan\nxc_param scanx_c1x 0.3\nxc_param scanx_c2x 0.3', 'tight'),
                 ('b3lyp', 'b3lyp', 'tight'),
                 ('scan0', 'dfauto scan0', 'tight'),
                 ('m06', 'm06', 'tight'),

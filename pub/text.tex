@@ -92,7 +92,7 @@ The distributions are displayed as box-and-whisker plots: a box shows the quarti
 The $x$-axis labels denote the functional and the value of the MBD range-separation parameter, $\beta^\text{MBD}$.
 The blue--red spectrum encodes the scaling, $q$, of the respective equilibrium distances of individual complexes.
 The green numbers indicate the mean absolute error (kcal/mol) for $q=1$.
-The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown for PBE, PBE0, B3LYP, and M06 optimize both mean and standard deviation of relative errors (MRE, SDRE) around $q=1$; $\beta=1.4$ for LDA optimizes MRE and SDRE for $q=2$; and for SCAN and all $q$, $\beta=1.1$ optimizes SDRE, and $\beta=1.4$ optimizes MRE\@.
+The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown for PBE, PBE0, B3LYP, SCAN* (see text), and M06 optimize both mean and standard deviation of relative errors (MRE, SDRE) around $q=1$; $\beta=1.4$ for LDA optimizes MRE and SDRE for $q=2$; and for SCAN and all $q$, $\beta=1.1$ optimizes SDRE, and $\beta=1.4$ optimizes MRE\@.
 }\label{fig:s66-dists}
 \end{figure*}
 
@@ -126,6 +126,7 @@ This enables us to study both the systematic error of a method (overall underbin
 \caption{\textbf{Dependence of means (MRE) and standard deviations (SDRE) of relative errors in binding energies on range-separation parameters.}
 Three long-range correlation models with their respective parameters are shown: (\textbf a) MBD with $\beta^\text{MBD}$, (\textbf b) VV10 with $b^\text{VV10}$, and (\textbf c) D3 with $a_2^\text{D3}$.
 Density functionals correspond to columns, and benchmark sets to rows within each subplot.
+Only the equilibrium-distance configurations of the S66 set are used.
 SCAN* denotes two reparameterizations of the SCAN functional discussed in the text. % chktex 36
 The vertical dotted lines show where MRE equals to zero or SDRE reaches minimum.
 For DFT+D3, two choices are shown of the two other range-separation parameters in D3: $a_1^\text{D3}$ and $s_8^\text{D3}$.
@@ -217,14 +218,35 @@ In the series of graphene-flake dimers, the electronic gap (calculated with SCAN
 Because the $\alpha=1$ behavior of SCAN makes it quite sensitive in the density tails, whose overlap also encodes the vdW bonding on the electron-density level, it only makes sense that SCAN is able to extract the nonlocal information about the system size via the decreasing electronic gap.
 This mechanism could be also partially responsible for the discrepancies in optimal range separation for SCAN observed on the S66, X23, and S12L sets.
 
-To check this hypothesis, we constructed two reparameterizations of SCAN and tested them on these benchmark sets.
+\begin{table}
+\caption{\textbf{Performance of DFT+MBD methods on the S66 set.}}\label{tab:statistics}
+\begin{tabular}{lrrrrr}
+\toprule
+functional  & $\beta^\text{MBD}$ & MAE$^\text{a}$  & MARE$^\text{b}$   & MRE$^\text{c}$     & SDRE$^\text{d}$ \\
+\midrule
+B3LYP                   & 0.67   & 0.67 & 15.0\% & 8.4\%   & 20.0\% \\
+LDA                     & no vdW & 1.79 & 31.8\% & $-31.0\%$ & 15.7\% \\
+M06                     & 1.20   & 0.29 & 8.4\%  & $-1.2\%$  & 13.2\% \\
+PBE                     & 0.83   & 0.40 & 8.3\%  & $-2.8\%$  & 10.1\% \\
+PBE0                    & 0.83   & 0.42 & 8.1\%  & $-4.2\%$  & 8.6\%  \\
+SCAN                    & 1.10   & 0.74 & 14.0\% & $-13.9\%$ & 5.5\%  \\
+                        & 1.40   & 0.56 & 11.6\% & 3.7\%   & 13.6\% \\
+SCAN* ($c_\mathrm{2x}$) & 1.10   & 0.20 & 4.4\%  & $-1.6\%$  & 5.8\%  \\ % chktex 36
+SCAN* ($d_\mathrm{x}$)  & 0.90   & 0.20 & 4.3\%  & 0.3\%   & 5.9\%  \\ % chktex 36
+\bottomrule
+\end{tabular}
+\small
+$^\text{a}$Mean absolute error (kcal/mol). $^\text{b}$Mean absolute relative error. $^\text{c}$Mean relative error. $^\text{d}$Standard deviation of relative errors.
+\end{table}
+
+To check this hypothesis, we constructed two reparameterizations of SCAN and tested them on these benchmark sets, with mixed results.
 We focused on the three parameters in Eq.~\ref{eq:scan-interp} because their values are determined weakly, having been fitted only to system-specific rather than universal norms.
 We found that either changing $c_\mathrm{2x}$ from 0.8 to 0.3 or changing $d_\mathrm x$ from 1.24 to 2 (Figure~\ref{fig:scan-interp}) substantially improves the consistency of SCAN in describing vdW systems (Figure~\ref{fig:param-fitting}a), by removing the ambiguity in whether to optimize for MRE or SDRE\@.
-The overall performance is also improved, bringing MARE of SCAN*+MBD on S66 to only 4.5\% in both cases, a two-fold improvement over PBE+MBD\@.
-Both reparameterizations change behavior of the functional in the regions of overlap of closed shells, making the slopes of the interpolating function more similar on both sides of $\alpha=1$.
-This is in line with the hypothesis that it is the behavior around $\alpha=1$ (uniform-gas limit) that is causing the imbalanced behavior for vdW systems.
+The overall performance is also improved, bringing MARE of SCAN*+MBD on S66 to only 4.5\% in both cases, a two-fold improvement over PBE+MBD (Table~\ref{tab:statistics}).
 The $c_\mathrm{2x}$-variant retains the longer range of SCAN (optimal $\beta^\text{MBD}$ of 1.1 on S66), while the $d_\mathrm x$-variant brings it closer to that of PBE ($\beta^\text{MBD}$ of 0.9).
 However, both reparameterizations still suffer from dependence of the optimal range separation on system type (cf.\ PBE), with optimal $\beta^\text{MBD}$ for X23 and S12L being larger by 0.1 than for S66.
+Furthermore, the S66 set (Figure~\ref{fig:s66-dists}, only $c_\mathrm{2x}$-variant is shown) reveals that the reparameterizations fix the overbinding tendency only around equilibrium, but not at larger intermolecular separations.
+Finally, Figure~\ref{fig:flakes} shows that the reparameterizations do not change the sensitivity of SCAN in the density tails, as they only shift the binding energy in graphene flakes by a constant.
 
 \section{Discussion}
 
@@ -238,9 +260,10 @@ Such a shift could also avoid some of the problems that long-range correlation m
 Our results confirm that such a shift is indeed possible in principle, but with the caveat that the description of the intermediate range by the density functional must be balanced and independent of system size.
 
 The two reparameterizations of the SCAN functional illustrate that the behavior of the range of even a very sophisticated functional can be changed by a single parameter, whose value is not fixed by any hard constraint.
-We did not evaluate any other properties besides vdW binding, and it is quite possible that the new parameter values would introduce regressions for other systems.
+At the same time, the fact that the reparameterizations improve the equilibrium behavior of SCAN without modifying the results on the graphene flakes and larger intermolecular separations shows that different aspects of a functional can be manifested in different situations.
+In our particular case, the situations could possibly differ in what ranges of the kinetic energy density and the reduced density gradient are relevant for the binding energies.
+Furthermore, we did not evaluate any other properties besides vdW binding, and it is quite possible that the new parameter values would introduce regressions for other systems.
 To give a true alternative parametrization, the original fitting procedure would need to be performed with an additional constraint on vdW binding, perhaps expressed via a single simple system, which is beyond the scope of this work.
-However, the restored smoothness of the slope of the interpolating function around $\alpha=1$ suggests that there is a solid physical motivation behind these reparameterizations.
 
 \section{Conclusions}
 

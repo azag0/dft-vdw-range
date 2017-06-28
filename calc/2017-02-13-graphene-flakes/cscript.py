@@ -80,6 +80,9 @@ def configure(ctx):
     methods = {
         'pbe': {'xc': 'pbe'},
         'scan': {'xc': 'dfauto scan'},
+        'scan(a)': {'xc': 'dfauto scan\nxc_param scanx_c2x 0.3'},
+        'scan(b)': {'xc': 'dfauto scan\nxc_param scanx_dx 2.0'},
+        'scan(c)': {'xc': 'dfauto scan\nxc_param scanx_c1x 0.3\nxc_param scanx_c2x 0.3'},
         'lda': {'xc': 'pw-lda'},
         'b3lyp': {'xc': 'b3lyp'},
         'm06': {'xc': 'm06'},
