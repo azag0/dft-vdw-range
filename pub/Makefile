@@ -9,6 +9,8 @@ preprint: $(BLDDIR)/preprint.pdf
 
 suppl: $(BLDDIR)/suppl.pdf
 
+minion: $(BLDDIR)/preprint-minion.pdf
+
 all: revtex preprint suppl figs
 
 figs:
