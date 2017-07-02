@@ -31,6 +31,7 @@ def taskgen(ctx, geom, dsname):
                 ('lda', 'pw-lda', 'tight'),
                 ('pbe', 'pbe', 'tight'),
                 ('pbe0', 'pbe0', 'tight'),
+                ('rpbe', 'rpbe', 'tight'),
                 ('scan', 'dfauto scan', 'tight'),
                 ('scan(a)', 'dfauto scan\nxc_param scanx_c2x 0.3', 'tight'),
                 ('scan(b)', 'dfauto scan\nxc_param scanx_dx 2.0', 'tight'),
