@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+
+def unpack(caf, path: ('--path', Path), cache: '--cache'):
+    """
+    dummy
+    """
+    ...
+
+
+if __name__ == '__main__':
+    from caflib.Caf import Caf
+    Caf.command()(unpack)
+    caf = Caf()
+    try:
+        caf(sys.argv)
+    except KeyboardInterrupt:
+        pass

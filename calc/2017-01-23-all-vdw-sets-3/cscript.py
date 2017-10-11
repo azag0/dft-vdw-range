@@ -23,6 +23,11 @@ b_vv10_values = [4.5, 6.3, 8., 10., 13., 16., 19., 22.]
 
 pseudo_root = Path(os.environ['ESPRESSO_PSEUDO'])
 
+xc_pre = {
+    'm06': ('pbe', 5),
+    'm06-l': ('pbe', 5),
+}
+
 
 def taskgen(ctx, geom, dsname):
     with timing('taskgen'):
@@ -32,13 +37,15 @@ def taskgen(ctx, geom, dsname):
                 ('pbe', 'pbe', 'tight'),
                 ('pbe0', 'pbe0', 'tight'),
                 ('rpbe', 'rpbe', 'tight'),
+                ('m06-l', 'm06-l', 'tight'),
                 ('scan', 'dfauto scan', 'tight'),
-                ('scan(a)', 'dfauto scan\nxc_param scanx_c2x 0.3', 'tight'),
-                ('scan(b)', 'dfauto scan\nxc_param scanx_dx 2.0', 'tight'),
-                ('scan(c)', 'dfauto scan\nxc_param scanx_c1x 0.3\nxc_param scanx_c2x 0.3', 'tight'),
+                # ('scan(a)', 'dfauto scan\nxc_param scanx_c2x 0.3', 'tight'),
+                ('scan(b)', 'dfauto scan\nxc_param scanx_dx 1.6', 'tight'),
+                # ('scan(c)', 'dfauto scan\nxc_param scanx_c1x 0.3\nxc_param scanx_c2x 0.3', 'tight'),
                 ('b3lyp', 'b3lyp', 'tight'),
                 ('scan0', 'dfauto scan0', 'tight'),
                 ('m06', 'm06', 'tight'),
+                ('tpss', 'tpss', 'tight'),
                 ('pbe-light', 'pbe', 'light'),
                 ('scan-light', 'dfauto scan', 'light'),
                 ('b3lyp-light', 'b3lyp', 'light'),
@@ -46,6 +53,12 @@ def taskgen(ctx, geom, dsname):
                 ('scan0-light', 'dfauto scan0', 'light'),
                 ('m06-light', 'm06', 'light')
         ]:
+            charge = geom.metadata.get('charge') or 0
+            if geom.metadata.get('cp'):
+                if label not in ['scan', 'm06', 'm06-l', 'm06-l-2', 'scan(b)']:
+                    continue
+                if label == 'scan' and dsname in ['S66x8', 'S22']:
+                    charge = None
             task = ctx(
                 features='aims',
                 templates=['geometry.in', (
@@ -53,11 +66,11 @@ def taskgen(ctx, geom, dsname):
                     else 'control.in', 'control.in'
                 )],
                 geom=geom,
-                charge=geom.metadata.get('charge') or 0,
+                charge=charge,
                 k_grid=geom.get_kgrid(0.8),
                 output='hirshfeld' if label == 'pbe' else None,
                 xc=xc,
-                xc_pre=('m06-l', 10) if xc == 'm06' else None,
+                xc_pre=xc_pre.get(xc),
                 basis=basis,
                 aims='aims.master'
             ) + ctx.link('calc', ('run.out', 'aims.out')) + ctx(
@@ -67,6 +80,8 @@ def taskgen(ctx, geom, dsname):
             if label == 'pbe':
                 pbe = task
             task + ctx.link(label) + master
+        if geom.metadata.get('cp'):
+            return master
         inp = {
             'coords': geom.coords,
             'species': geom.species

@@ -16,7 +16,7 @@ def collector():
     cellar = Cellar(f'{root}/.caf')
     tree = cellar.get_tree(objects=True)
     data = []
-    for hashid, path in tree.glob('{dimers*,monomers}/*/*/*'):
+    for hashid, path in tree.glob('{dimers*,monomers*}/*/*/*'):
         fragment, name, xc, basis = path.split('/')
         if 'strip' in name:
             continue

@@ -2,7 +2,9 @@ from caflib.Tools.geomlib import Atom, Molecule, Crystal
 import numpy as np
 from numpy import sqrt, cos, sin, pi
 from numpy.linalg import norm
+import re
 
+from caflib.Configure import feature
 
 paths = ['*/*/<>/<>', 'relax/*']
 
@@ -61,9 +63,17 @@ def configure(ctx):
         [Atom('C', (0, 0, 0)), Atom('C', u1)]
     )
     dimers = {}
+    monomers_cp = {}
     for name, geom in monomers.items():
         dimers[name, 'AA'] = geom + geom.shifted((0, 0, 3.35))
         dimers[name, 'AB'] = geom + geom.shifted(u1+u2+(0, 0, 3.35))
+        geom_dummy = geom.copy()
+        for atom in geom_dummy:
+            atom.flags['dummy'] = True
+            atom.prop = atom.prop.copy()
+            atom.prop['mass'] *= 0.1
+        monomers_cp[name, 'AA'] = geom_dummy + geom.shifted((0, 0, 3.35))
+        monomers_cp[name, 'AB'] = geom_dummy + geom.shifted(u1+u2+(0, 0, 3.35))
     for name, geom in monomers.items():
         ctx(
             features='aims',
@@ -109,24 +119,56 @@ def configure(ctx):
                     k_grid = None
                 for system, db in [
                         ('monomers', monomers),
+                        ('monomers-AA-cp', monomers_cp),
+                        ('monomers-AB-cp', monomers_cp),
                         ('dimers-AA', dimers),
                         ('dimers-AB', dimers)
                 ]:
+                    if system.endswith('-cp') and not (basis == 'tight' and method_key == 'scan' and name != 'graphene'):
+                        continue
+                    if method_key == 'scan' and basis == 'tight' and name == 'graphene':
+                        tier = 4
+                    else:
+                        tier = None
                     path = f'{system}/{name}/{method_key}/{basis}'
-                    if 'dimers' in system:
+                    if 'dimers' in system or system.endswith('-cp'):
                         stacking = system.split('-')[1]
                         geom = db[name, stacking]
                     else:
                         geom = db[name]
                     ctx(
-                        features='aims',
+                        features=['aims', uncomment_tier],
                         templates='control.in geometry.in',
                         xc=method['xc'],
                         niter=100 if 'strip' in name else 1000,
                         geom=geom,
+                        tier=tier,
                         **vdw,
                         xc_pre='pbe 8' if method_key == 'm06' else None,
                         k_grid=k_grid,
                         basis=basis,
                         aims='aims.master',
                     ) * ctx.target(path)
+
+
+@feature('uncomment_tier')
+def uncomment_tier(tsk):
+    tier = tsk.consume('tier')
+    if tier is None:
+        return
+    buffer = ''
+    tier_now = None
+    for l in tsk.inputs['control.in'].split('\n'):
+        m = re.search(r'"(\w+) tier"', l) or re.search(r'(Further)', l)
+        if m:
+            tier_now = {'First': 1, 'Second': 2, 'Third': 3, 'Fourth': 4, 'Further': 5}[m.group(1)]
+        m = re.search(r'#?(\s*(hydro|ionic) .*)', l)
+        if m:
+            l = m.group(1)
+            if not (tier_now and tier_now <= tier):
+                l = '#' + l
+        if '####' in l:
+            tier_now = None
+        buffer += l + '\n'
+    buffer = buffer.replace('sc_iter_limit', 'override_illconditioning .true.\nbasis_threshold 1e-4\nsc_iter_limit')
+    tsk.inputs['control.in'] = buffer

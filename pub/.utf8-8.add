@@ -67,3 +67,13 @@ PW86
 reparameterized
 pseudopotentials
 X40
+semilocal
+nonempirical
+overbind
+interatomic
+perturbative
+solvation
+CCSD
+semilocality
+minima
+interelectronic

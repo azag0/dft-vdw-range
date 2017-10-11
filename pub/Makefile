@@ -11,6 +11,8 @@ suppl: $(BLDDIR)/suppl.pdf
 
 minion: $(BLDDIR)/preprint-minion.pdf
 
+diff: $(BLDDIR)/diff.pdf
+
 all: revtex preprint suppl figs
 
 figs:

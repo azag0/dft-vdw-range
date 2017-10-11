@@ -9,6 +9,8 @@ DashExcpt = {
     blue--red
     C--H
     C--C
+    bucky-ball--catcher
+    exchange--correlation
 }
 CmdLine = {
 }

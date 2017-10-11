@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 import json
+from math import nan
 
 root = '../calc/2017-04-24-scan-modifications'
 import sys
@@ -30,13 +31,16 @@ def collector():
                 for fragment in cluster.fragments:
                     path = f'{name}/{keypath}/{fragment}/{param_name}'
                     hashid = tree[path]
+                    if 'outputs' not in tree.objects[hashid]:
+                        enes[fragment] = nan
+                        continue
                     filehash = tree.objects[hashid]['outputs']['results.json']
                     with open(cellar.get_file(filehash)) as f:
                         results = json.load(f)
                     enes[fragment] = results['scf_energy']
                 data.append((
                     name, system, ' '.join(map(str, flatten(params))),
-                    cluster.get_int_ene(enes)/ev*kcal, ref
+                    cluster.get_int_ene(enes)[1]/ev*kcal, ref
                 ))
     data = pd.DataFrame(
         data,

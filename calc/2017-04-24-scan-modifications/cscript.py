@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-from caflib.Tools import geomlib
+from caflib.Tools import geomlib, aims
 import vdwsets.vdwsets as vdw
+
+aims._tags.append('xc_param')
 
 
 def flatten(x):
@@ -45,7 +47,7 @@ def taskgen(ctx, geom, dsname):
             xc_param=params,
             xc='dfauto scan',
             basis='tight',
-            aims_delink='aims.1a57b68'
+            aims_delink='aims.b4baa15' if geom.metadata.get('cp') else 'aims.1a57b68',
         ) + ctx.link('calc', ('run.out', 'aims.out')) + ctx(
             command='python3 process.py <aims.out >results.json',
             files='process.py'
