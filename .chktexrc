@@ -1,0 +1,15 @@
+DashExcpt = {
+    exchange--correlation
+    Kohn--Sham
+    bucky-ball--catcher
+    Hartree--Fock
+    Thomas--Fermi
+    dipole--dipole
+    dipole--quadrupole
+    blue--red
+}
+CmdLine = {
+    --nowarn 3
+    --nowarn 36
+    --nowarn 35
+}

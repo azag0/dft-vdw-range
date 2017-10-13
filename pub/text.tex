@@ -1,12 +1,22 @@
 \section{Introduction}
 
-In a true many-body electronic wave function, the motions of electrons are correlated across the entire range of inter-electronic distances.
-A large part of this correlation is efficiently captured by various approximations to the Kohn--Sham density-functional theory (KS-DFT)~\cite{KohnPR65} in the form of the exchange--correlation (XC) energy, which established it as a basic tool in computational chemistry and condensed-matter physics.
-But the standard density functionals are semilocal in space, resulting in XC energy that decays exponentially with distance---as if the electrons were essentially uncorrelated at long range (except for the special case of slowly-varying electron density).
+In a true many-body electronic wave function, the motions of electrons are correlated across the entire range of interelectronic distances.
+The (in principle exact) Kohn--Sham density functional theory (KS-DFT)~\cite{KohnPR65} captures all the correlations in the form of the exchange--correlation (XC) energy.
+Many approximate functionals are able to efficiently estimate most of the XC energy, which established KS-DFT as a basic tool in computational chemistry and condensed-matter physics.
+But the standard approximations are semilocal in space, resulting in XC energy that decays exponentially with distance---as if the electrons were essentially uncorrelated at long range (except for the special case of slowly-varying electron density).
 This leads to severe underestimation of van der Waals (vdW) dispersion interactions, which are mostly caused by long-range electron correlation.
 As these interactions strongly contribute to properties of nearly all biological and modern synthetic materials, many models were developed that account specifically for the long-range correlation~\cite{DionPRL04,VydrovJCP10a,JohnsonJCP06,TkatchenkoPRL09,GrimmeJCP10,AmbrosettiJCP14} to augment the semilocal (or hybrid) density-functional calculations.
 The range separation of electron correlation into short-range and long-range models can be in principle done formally~\cite{HermannCR17}, but insufficient knowledge about the ranges of different semilocal functionals prevents this in practice.
-The vdW methods range from interatomic pairwise sums, to spatial double-integral functionals, to Hamiltonian-based models, but in all these cases the issue of range separation can be reduced to empirical damping functions that couple the semilocal and nonlocal contributions to the electron correlation.
+The vdW methods range from interatomic pairwise sums, to spatial double-integral functionals, to Hamiltonian many-body models, but in all these cases the issue of range separation can be reduced to empirical damping mechanisms that couple the semilocal and nonlocal contributions to the electron correlation.
+
+Fitting empirical damping functions to benchmark binding energies has three associated issues, all of which decrease the transferability and hence generality of the resulting DFT+vdW methods.
+First, the asymptotic binding energies predicted by the approximate vdW models may have both systematic and unsystematic errors, which can be ``fixed'' by the fitting only for a fairly small class of systems.
+Second, the effective range of the semilocal functionals may systematically depend on the system type.
+The fitted damping function would then strongly depend on the selection of the training set.
+Third, this approach assumes that the only error in the KS-DFT energies is the missing long-range correlation, where in fact other noncovalent interactions may also be estimated incorrectly by the approximate semilocal functionals.
+The fitting then effectively corrects for these errors, but such compensation is nontransferable to systems besides the training set.
+These issues could be largely solved if the effective range of the semilocal functionals was well-defined, which would restrict the form of the damping functions, limiting the chance of spurious error overcorrection.
+Understanding the effective range of current semilocal functionals is then a first step toward a more systematic range separation in the DFT+vdW methods.
 
 \begin{figure}
 \includegraphics[center]{../media/range-curves}
@@ -18,11 +28,18 @@ PBE+MBD is shown as an example of a method with the correct (algebraic) asymptot
 \end{figure}
 
 The SCAN functional is a recent first-principles semilocal functional~\cite{SunPRL15} with promising results across a broad range of systems in chemistry and physics, in many cases reaching the accuracy of hybrid functionals at a fraction of their cost~\cite{SunNC16}.
-SCAN is still only a semilocal functional, however, and does not describe long-range electron correlation, resulting in a lack of long-range vdW interactions (Figure~\ref{fig:range}).
+SCAN is still only a semilocal functional, however, and does not describe long-range electron correlation, resulting in a lack of long-range vdW interactions.
 On the other hand, the many-body dispersion (MBD) method is an interatomic model of long-range electron correlation~\cite{TkatchenkoPRL12,AmbrosettiJCP14} that can be combined with any short-range correlation method, such as semilocal DFT, the density-functional tight-binding method~\cite{StohrJCP16}, or classical force fields~\cite{BereauJCP14}.
 The crossover regime, where a short-range description blends with the long-range MBD description, is controlled with a single parameter directly via a range-separated interelectronic Coulomb potential.
 When trying to adjust this parameter for the SCAN functional---essentially estimating the XC range of SCAN for vdW interactions---we observed that the optimal value depends significantly on the choice of the studied systems and for some system types also on the choice of the optimized statistical quantity.
 Since this is not the case for some older density functionals such as PBE or TPSS, we set out to study in general the range of electron correlation as described by different density functionals in vdW-bound systems.
+
+Figure~\ref{fig:range} illustrates the general notion of the effective range of semilocal functionals.
+Based on the asymptotic binding energy of the uracil dimer and bucky-catcher complex, the functionals can be sorted in order of increasing effective range as $\text{BLYP}<\text{RPBE}\approx\text{TPSS}\approx\text{PBE}<\text{SCAN}\approx\text{M06-L}\approx\text{LDA}$.
+The uracil dimer is bound relatively more strongly by the semilocal functionals than the bucky-catcher complex, because of relatively smaller distance between the ``surfaces'' of the molecules (larger density overlap) and larger ratio of the overlap surface to the volume of the interacting molecules.
+All three strongest-binding functionals capture more than 80\% of the binding energy in the uracil dimer (LDA even overbinds), but only 40--80\% in the bucky-catcher complex.
+Most importantly, none of the semilocal functionals yields correct asymptotic binding, so that while M06-L captures 80\% of the interaction energy of the bucky-catcher at equilibrium, it is only 50\% when the intermolecular distance increases by 2\,\AA\ and 15\% after additional 3\,\AA\@.
+This work attempts to formulate and answer the general question whether the effective range of the functionals is consistent between such two different systems.
 
 \section{Background}
 
@@ -31,7 +48,7 @@ Since this is not the case for some older density functionals such as PBE or TPS
 Some aspects of the ``tail'' behavior of semilocal density functionals in vdW systems are known, mostly from observations made on particular systems.
 The Hartree--Fock (HF) model separates the correlation of electronic motions into the exchange and ``pure'' correlation parts, the second of which is exclusively responsible for vdW attraction.
 This does not translate well into exchange and correlation as approximated by semilocal density functionals in DFT, where the exchange part often contributes much more than the correlation part to the vdW attraction at equilibrium distances.
-This behavior is caused by the implicit cancellation of errors between the two parts, and is reflected by the fact that most of the literature on the topic of vdW interactions and XC functionals is concerned with exchange, not correlation functionals.
+This behavior is caused by the XC functionals modeling the corresponding exchange and correlation holes locally, and is reflected by the fact that most of the literature on the topic of vdW interactions and XC functionals is concerned with exchange, not correlation functionals.
 (See ref.\,\cite{PengPRX16} for a more detailed discussion.)
 
 Nearly all exchange energy functionals of the electron density, $n$, are constructed such that they are exact for the uniform electron gas, and are therefore of the form
@@ -51,7 +68,7 @@ Our study includes the GGA functional from Perdew, Burke, and Ernzerhof (PBE)~\c
 The search for semilocal functionals with the appropriate XC range has been done mostly within the space of GGAs and in the context of the vdW-DF nonlocal functional~\cite{DionPRL04,LeePRB10,MurrayJCTC09}, a long-range correlation method whose correlation range is not easily modified.
 Several special-purpose functionals designed to combine well with long-range correlation models were developed, ranging from completely new constructions~\cite{PernalPRL09,WellendorffPRB12}, to recombinations of older forms~\cite{CooperPRB10,HamadaPRB14,BerlandPRB14}, to simple reparameterizations of standard functionals~\cite{ZhangPRL98,KlimesJPCM10,KlimesPRB11}.
 (An ``ideal'' exchange functional in this regard would be different from the exact exchange, because it would still contain a part of the short-range post-HF correlation that is not covered by GGA correlation functionals.)
-All of these functionals perform well for vdW-bound systems (when combined with a vdW model), but not much is known about their accuracy for other systems, preventing them from becoming general methods.
+Some of these functionals perform well for vdW-bound systems (when combined with a vdW model), but not much is known about their accuracy for other systems, preventing them from becoming general methods.
 
 In meta-GGAs, the third rung of the Jacob's ladder, still higher derivatives of the electron density (or occupied orbitals, $\phi_i$) beyond the gradient are used to construct the enhancement factor, $F_\mathrm x$.
 This includes the Laplacian of the density and the KS kinetic energy density, $\tau[n]=\sum_i^\text{occ}\lvert\boldsymbol\nabla\phi_i\rvert^2/2$.
@@ -79,7 +96,7 @@ We also analyze SCAN0~\cite{HuiJCP16}, a PBE0-like version of SCAN with 25\% of 
 \paragraph{Van der Waals methods: Long-range correlation models}
 
 By construction, density functionals from the first four rungs cannot describe long-range electron correlation.
-We use three different vdW methods to form DFT+vdW methods that capture the correlation of electrons at all inter-electronic distances.
+We use three different vdW methods to form DFT+vdW methods that capture the correlation of electrons at all interelectronic distances.
 All three have some explicit form of range separation built into them, which enables us to use them as probes to examine the implicit correlation range of the semilocal XC functionals.
 Hence, we briefly review the range-separation mechanisms in these vdW methods.
 
@@ -181,8 +198,10 @@ Both issues may stem from the fact that the heavily fitted M06-L is parametrized
 \caption{\textbf{Overall performance of DFT+MBD methods.}}\label{tab:statistics}
 \begin{tabular}{lrrrrrrr}
 \toprule
-functional & \multicolumn3c{MARE$^\text{a}$} & \multicolumn3c{MRE$^\text{b}$} & $\beta^\text{MBD,c}$ \\
+XC & \multicolumn3c{MARE$^\text{a}$} & \multicolumn3c{MRE$^\text{b}$} & $^\text{c}$ \\
 & S66 & X23 & S12L & S66 & X23 & S12L & \\
+\midrule
+& \multicolumn6c{MBD} & $\beta^\text{MBD}$ \\
 \midrule
     LDA & 32\%  & 21\%  & 12\%  & $-31$\%  & $-17$\%  & 0.1\%    & $\infty$ \\
   B3LYP & 15\%  & 8.0\% & 12\%  & 5.2\%    & $-2.4$\% & 2.5\%    & 0.64     \\
@@ -190,13 +209,31 @@ functional & \multicolumn3c{MARE$^\text{a}$} & \multicolumn3c{MRE$^\text{b}$} & 
    PBE0 & 7.6\% & 5.4\% & 6.5\% & $-1.1$\% & $-1.7$\% & $-4.4$\% & 0.85     \\
    SCAN & 4.8\% & 8.4\% & 11\%  & $-3.0$\% & $-7.7$\% & $-10$\%  & 1.12     \\
   M06-L & 9.2\% & 16\%  & 29\%  & 2.4\%    & $-16$\%  & $-28$\%  & 1.20     \\
+\midrule
+& \multicolumn6c{VV10} & $b^\text{VV10}$ \\
+\midrule
+    LDA & 36\%  & 37\% & 21\% & $-27\%$  & $-37\%$  & $-21\%$  & $\infty$ \\
+  B3LYP & 11\%  & 32\% & 45\% & $-9.3\%$ & $-32\%$  & $-45\%$  & 4.6      \\
+    PBE & 9.9\% & 15\% & 15\% & $-6.1\%$ & $-15\%$  & $-15\%$  & 6.8      \\
+   PBE0 & 8.3\% & 15\% & 20\% & $-5.3\%$ & $-15\%$  & $-20\%$  & 6.9      \\
+   SCAN & 9.3\% & 10\% & 11\% & 2.4\%    & $-9.4\%$ & $-9.9\%$ & 13.7     \\
+  M06-L & 11\%  & 17\% & 27\% & 5.5\%    & $-17\%$  & $-27\%$  & 16.2     \\
+\midrule
+& \multicolumn6c{D3} & $a_2^\text{D3}$ \\
+\midrule
+    LDA & 33.1\% & 24.9\% & 11.5\% & $-32.2\%$ & $-22.6\%$ & $-2.7\%$  & $\infty$ \\
+  B3LYP & 17.0\% & 10.3\% & 16.9\% & 5.4\%     & 2.6\%     & 13.0\%    & 1.62     \\
+    PBE & 10.6\% & 7.1\%  & 11.7\% & $-1.1\%$  & 2.7\%     & 10.3\%    & 3.0      \\
+   PBE0 & 9.9\%  & 6.2\%  & 9.1\%  & $-1.2\%$  & 3.2\%     & 5.1\%     & 3.1      \\
+   SCAN & 6.0\%  & 7.4\%  & 7.1\%  & $-3.8\%$  & $-5.0\%$  & $-5.0\%$  & 5.1      \\
+  M06-L & 8.3\%  & 14.5\% & 24.1\% & 0.9\%     & $-14.2\%$ & $-23.5\%$ & 5.6      \\
 \bottomrule
 \end{tabular}
 
 \small
 $^\text{a}$Mean absolute relative error.
 $^\text{b}$Mean relative error.
-$^\text{c}$Range-separation parameter of MBD minimizing MARE\@.
+$^\text{c}$Range-separation parameter minimizing MARE on S66\@.
 \end{table}
 
 Of the tested functionals, PBE and SCAN (or their hybrid versions) show a potential to work as general balanced DFT+vdW methods.
@@ -282,4 +319,4 @@ To give a true alternative parametrization, the original fitting procedure would
 
 We showed that although the range of semilocal functionals cannot be known explicitly, it is still possible to obtain meaningful and detailed information about their range by probing them with long-range correlation models, for which the range is known explicitly.
 This information can be then used to construct the functionals in such a way that their range is consistent across different systems, a condition necessary for a generally applicable DFT+vdW method.
-After all, semilocal functionals and vdW methods model two interconnected parts of a single thing, the electron correlation, and it makes only sense to develop them in tandem.
+After all, semilocal functionals and vdW methods model two interconnected parts of the electron correlation, and it is reasonable to develop them in tandem.
