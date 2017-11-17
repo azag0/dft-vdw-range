@@ -2,3 +2,4 @@
 .caf
 /data/*.h5
 /src/*.html
+/calc/*/*.html
