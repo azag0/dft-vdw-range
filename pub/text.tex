@@ -18,7 +18,7 @@ The fitting then effectively corrects for these errors, but such compensation is
 These issues could be largely solved if the effective range of the semilocal functionals was well-defined, which would restrict the form of the damping functions, limiting the chance of spurious error overcorrection.
 Understanding the effective range of current semilocal functionals is then a first step toward a more systematic range separation in the DFT+vdW methods.
 
-\begin{figure}
+\begin{figure}[t!]
 \includegraphics[center]{../media/range-curves}
 \caption{\textbf{Range of functionals.}
 Binding energy curves of a stacked uracil dimer (top) and a bucky-ball--catcher complex (bottom) with different XC functionals.
@@ -146,7 +146,7 @@ This enables us to study both the systematic error of a method (overall underbin
 
 \section{Results}
 
-\begin{figure*}
+\begin{figure*}[t!]
 \makebox[\textwidth][c]{
 \begin{tikzpicture}
 \node[below right, anchor=base] at (0.5,-0.5) {\bfseries a};
@@ -194,7 +194,8 @@ Finally, M06-L requires only slightly larger amount of long-range correlation th
 But several outliers are strongly overbound, and all complexes are overbound at longer distances, which is in line with previous studies~\cite{GoerigkJPCL15}.
 Both issues may stem from the fact that the heavily fitted M06-L is parametrized also on the S22 set, a smaller version of S66, but S66 contains additional complexes and out-of-equilibrium complexes for which M06-L was not ``trained''.
 
-\begin{table}
+\begin{table*}[t]
+\centering
 \caption{\textbf{Overall performance of DFT+MBD/VV10/D3 methods.}}\label{tab:statistics}
 \begin{tabular}{lrrrrrrr}
 \toprule
@@ -234,7 +235,7 @@ XC & \multicolumn3c{MARE$^\text{a}$} & \multicolumn3c{MRE$^\text{b}$} & $^\text{
 $^\text{a}$Mean absolute relative error.
 $^\text{b}$Mean relative error.
 $^\text{c}$Range-separation parameter minimizing MARE on S66\@.
-\end{table}
+\end{table*}
 
 Of the tested functionals, PBE and SCAN (or their hybrid versions) show a potential to work as general balanced DFT+vdW methods.
 To rule out the possibility that this conclusion about the two functionals is specific to MBD, we studied how MRE and SDRE of their combinations with MBD, VV10, and D3 depend on the respective range-separation parameters (Figure~\ref{fig:param-fitting}).
@@ -244,7 +245,7 @@ Furthermore, Figure~\ref{fig:param-fitting} shows that whereas the optimal range
 All these observations are true for all three vdW models.
 Summarized results for other functionals are presented in Table~\ref{tab:statistics}.
 
-\begin{figure}
+\begin{figure}[t!]
 \makebox[\linewidth][c]{
 \begin{tikzpicture}
 \node[below right] at (1.1,.1) {\includegraphics[height=1.2cm]{../media/bz2.png}};
@@ -279,7 +280,7 @@ Among meta-GGA functionals, SCAN has a relatively wide plateau around $\alpha=1$
 This results in spatial regions in the electron density tails (dominated by HOMO, the highest-occupied molecular orbital) that are described with a uniform-like functional instead of the more appropriate single-orbital form of $\alpha\approx0$.
 This can lead to sudden spikes in the exchange-correlation potential fairly outside the spatial regions where covalent bonding occurs~\cite{Gerit-private}.
 
-\begin{figure}
+\begin{figure}[t!]
 \centering
 \includegraphics{../media/scan-interp}
 \caption{\textbf{Interpolation and extrapolation used in the SCAN exchange functional.}

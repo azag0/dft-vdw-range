@@ -1,10 +1,11 @@
-\documentclass[aip,jcp,reprint]{revtex4-1} % chktex 8
+\documentclass[journal=jctcce,manuscript=article,layout=twocolumn]{achemso}
 \usepackage[utf8]{inputenc}
-\usepackage{microtype}
+\usepackage[version=3]{mhchem}
+\usepackage{amsmath}
+\usepackage{upgreek}
+\usepackage{booktabs}
 
 \input{preamble.tex}
-
-\begin{document}
 
 \title{Electronic exchange and correlation in van der Waals systems: Balancing semilocal and nonlocal energy contributions}
 
@@ -13,6 +14,8 @@
 \author{Alexandre Tkatchenko}
 \email{alexandre.tkatchenko@uni.lu}
 \affiliation{Physics and Materials Science Research Unit, University of Luxembourg, 162A Avenue de la Faïencerie, L-1511 Luxembourg}
+
+\begin{document}
 
 \begin{abstract}
   \input{abstract.tex}
@@ -24,8 +27,13 @@
 
 \input{text.tex}
 
-\begin{acknowledgments}
-\end{acknowledgments}
+\begin{acknowledgement}
+We acknowledge\ldots
+\end{acknowledgement}
+
+\begin{suppinfo}
+Computational details, detailed description of the computational protocol, references to raw data used to generate the figures in the manuscript; calculations on the 3B-69 set for 3-body interactions, rare-gas dimers, and the X40 set; plot of the dependence of the errors on system size; extensions of some figures from the main text to more functionals.
+\end{suppinfo}
 
 \bibliography{refs-zotero,refs}
 
