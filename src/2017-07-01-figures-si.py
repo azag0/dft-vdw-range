@@ -161,7 +161,7 @@ def plot_stat2(ax, df, param, handles):
 
 
 def plot_all_funcs():
-    funcs = ['lda', 'pbe', 'pbe0', 'b3lyp', 'scan', 'm06']
+    funcs = ['lda', 'pbe', 'pbe0', 'b3lyp', 'scan', 'm06-l']
     setnames = ['S66x8', 'X23', 'S12L']
     methods = OrderedDict((k, v) for k, *v in [
         ('mbd', 'beta', r'$\beta^\mathrm{MBD}$', [.8, 1, 1.2]),
