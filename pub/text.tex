@@ -19,7 +19,7 @@ These issues could be largely solved if the effective range of the semilocal fun
 Understanding the effective range of current semilocal functionals is then a first step toward a more systematic range separation in the DFT+vdW methods.
 
 \begin{figure}[t!]
-\includegraphics[center]{../media/range-curves}
+\includegraphics[center]{media/range-curves}
 \caption{\textbf{Range of functionals.}
 Binding energy curves of a stacked uracil dimer (top) and a bucky-ball--catcher complex (bottom) with different XC functionals.
 The circles denote minima, the black circle corresponds to a reference value (see text).
@@ -113,7 +113,7 @@ Since our goal here is to cover a broad range of vdW models, we use the BJ dampi
 The BJ-damped D3 method uses three parameters that control its short-range behavior: $s_8^\text{D3}$ controls global mixing of the dipole--quadrupole term (which is inherently short-ranged due to its faster algebraic decay compared to the dipole--dipole term), and the closely related $a_1^\text{D3}$ and $a_2^\text{D3}$ control the onset of the dipole--dipole term ($a_1^\text{D3}$ scales vdW radii, $a_2^\text{D3}$ offsets them).
 
 \begin{figure*}[t!]
-\makebox[\textwidth][c]{\includegraphics{../media/s66-dists}}
+\makebox[\textwidth][c]{\includegraphics{media/s66-dists}}
 \caption{\textbf{Distributions of relative errors in binding energies on the S66 set of several DFT+MBD combinations.}
 The distributions are displayed as box-and-whisker plots: a box shows the quartiles and whiskers represent the rest of the distribution, except for outliers that are more than 2.5-fold the interquartile distance from the box, which are shown individually.
 The $x$-axis labels denote the functional and the value of the MBD range-separation parameter, $\beta^\text{MBD}$.
@@ -150,11 +150,11 @@ This enables us to study both the systematic error of a method (overall underbin
 \makebox[\textwidth][c]{
 \begin{tikzpicture}
 \node[below right, anchor=base] at (0.5,-0.5) {\bfseries a};
-\node[below right] at (0,0) {\includegraphics{../media/mbd-param-fitting.pdf}};
+\node[below right] at (0,0) {\includegraphics{media/mbd-param-fitting.pdf}};
 \node[below right, anchor=base] at (8.1,-0.5) {\bfseries b};
-\node[below right] at (7.6,-0.3) {\includegraphics{../media/vv10-param-fitting.pdf}};
+\node[below right] at (7.6,-0.3) {\includegraphics{media/vv10-param-fitting.pdf}};
 \node[below right, anchor=base] at (13.6,-0.5) {\bfseries c};
-\node[below right] at (13.1,-0.3) {\includegraphics{../media/d3-param-fitting.pdf}};
+\node[below right] at (13.1,-0.3) {\includegraphics{media/d3-param-fitting.pdf}};
 \end{tikzpicture}
 }
 \caption{\textbf{Dependence of means (MRE) and standard deviations (SDRE) of relative errors in binding energies on range-separation parameters.}
@@ -248,11 +248,11 @@ Summarized results for other functionals are presented in Table~\ref{tab:statist
 \begin{figure}[t!]
 \makebox[\linewidth][c]{
 \begin{tikzpicture}
-\node[below right] at (1.1,.1) {\includegraphics[height=1.2cm]{../media/bz2.png}};
-\node[below right] at (2.2,.1) {\includegraphics[height=1.2cm]{../media/cor21.png}};
-\node[below right] at (3.5,.1) {\includegraphics[height=1.2cm]{../media/cor22.png}};
-\node[below right] at (6.7,0) {\includegraphics[height=1.0cm]{../media/gr2.png}};
-\node[below right] at (0,-1) {\includegraphics{../media/flakes.pdf}};
+\node[below right] at (1.1,.1) {\includegraphics[height=1.2cm]{media/bz2.png}};
+\node[below right] at (2.2,.1) {\includegraphics[height=1.2cm]{media/cor21.png}};
+\node[below right] at (3.5,.1) {\includegraphics[height=1.2cm]{media/cor22.png}};
+\node[below right] at (6.7,0) {\includegraphics[height=1.0cm]{media/gr2.png}};
+\node[below right] at (0,-1) {\includegraphics{media/flakes.pdf}};
 \end{tikzpicture}
 }
 \caption{\textbf{Binding energies of graphene-flake dimers.}
@@ -282,7 +282,7 @@ This can lead to sudden spikes in the exchange-correlation potential fairly outs
 
 \begin{figure}[t!]
 \centering
-\includegraphics{../media/scan-interp}
+\includegraphics{media/scan-interp}
 \caption{\textbf{Interpolation and extrapolation used in the SCAN exchange functional.}
 The fixed points that are inter- and extrapolated are $\alpha=0$ and $\alpha=1$.
 The shape of the function is controlled with three parameters, $c_\mathrm{1x}=0.667$, $c_\mathrm{2x}=0.8$, and $d_\mathrm x=1.24$ (original values).
