@@ -56,7 +56,7 @@ Nearly all exchange energy functionals of the electron density, $n$, are constru
   E_\mathrm x[n]=\int\mathrm d\mathbf rn(\mathbf r)\varepsilon^\text{unif}_\text x(n(\mathbf r))F_\mathrm x[n](\mathbf r)
   \label{eq:exchange-form}
 \end{equation}
-where the exchange energy density of a uniform electron gas, $\varepsilon^\text{unif}_\mathrm x(n)=-3k_\mathrm F(n)/4\pi$, $k_\mathrm F(n)(3\pi^2n)^{1/3}$, is multiplied with the so-called enhancement factor, $F_\mathrm x[n](\mathbf r)$, which goes to zero for a homogeneous density.
+where the exchange energy density of a uniform electron gas, $\varepsilon^\text{unif}_\mathrm x(n)=-3k_\mathrm F(n)/4\pi$, $k_\mathrm F(n)(3\pi^2n)^{1/3}$, is multiplied with the so-called enhancement factor, $F_\mathrm x[n](\mathbf r)$, which goes to one for a homogeneous density.
 (This is also the reason why all such functionals describe the electron correlation energy completely in the uniform gas, including the long range part.
 However, since this description is only local and effective, it does not transfer into inhomogeneous systems, which vdW-bound systems inherently are.)
 
@@ -69,10 +69,11 @@ The search for semilocal functionals with the appropriate XC range has been done
 Several special-purpose functionals designed to combine well with long-range correlation models were developed, ranging from completely new constructions~\cite{PernalPRL09,WellendorffPRB12}, to recombinations of older forms~\cite{CooperPRB10,HamadaPRB14,BerlandPRB14}, to simple reparameterizations of standard functionals~\cite{ZhangPRL98,KlimesJPCM10,KlimesPRB11}.
 (An ``ideal'' exchange functional in this regard would be different from the exact exchange, because it would still contain a part of the short-range post-HF correlation that is not covered by GGA correlation functionals.)
 Some of these functionals perform well for vdW-bound systems (when combined with a vdW model), but not much is known about their accuracy for other systems, preventing them from becoming general methods.
+Similar approach was used in the construction of several XC functionals~\cite{MardirossianPCCP14,MardirossianJCP15a,MardirossianJCP16}, spanning the whole Jacob's ladder, based on the B97 functional~\cite{BeckeJCP97}, in which the fixed vdW counterpart was VV10 instead of vdW-DF\@.
 
 In meta-GGAs, the third rung of the Jacob's ladder, still higher derivatives of the electron density (or occupied orbitals, $\phi_i$) beyond the gradient are used to construct the enhancement factor, $F_\mathrm x$.
 This includes the Laplacian of the density and the KS kinetic energy density, $\tau[n]=\sum_i^\text{occ}\lvert\boldsymbol\nabla\phi_i\rvert^2/2$.
-Three meta-GGAs are included in this study: TPSS~\cite{TaoPRL03}, M06~\cite{ZhaoTCA08}, and the already mentioned SCAN\@.
+Three meta-GGAs are included in this study: TPSS~\cite{TaoPRL03}, M06-L~\cite{ZhaoTCA08}, and the already mentioned SCAN\@.
 In both of them (and in SCAN only so), the kinetic energy density enters via a local density parameter, $\alpha[n](\mathbf r)$, which serves as a measure of localization of electrons~\cite{BeckeJCP90},
 \begin{equation}
   \alpha=(\tau-\tau^\text W)/\tau^\text{unif}\geq0
@@ -86,6 +87,13 @@ SCAN uses this information directly by interpolating and extrapolating forms con
   \label{eq:scan-interp}
 \end{multline}
 where $\theta$ is the Heaviside step function, and $c_\mathrm{1x}=0.667$, $c_\mathrm{2x}=0.8$, and $d_\mathrm x=1.24$ are three of the total seven parameters in SCAN which are determined by fitting to properties (norms) of several model systems.
+
+Traditionally, the effective range of exchange functionals have been estimated from the behavior of $F_\text{X}[n]$ for large values of the reduced gradient, $s[n]$, which are characteristic of the density tails, where density overlap in vdW systems occurs.
+In general, this analysis predicts conclusions similar to those we find by the analysis of binding energies in this work.
+For instance (referring to Figure~\ref{fig:range}), $F_\text{X}$ grows faster with $s$ in RPBE compared to PBE, and in both cases $F_\text X$ is well above that of LDA (value of 1).
+Both these observations are in line with the effective range observed on the binding energy curves of both the uracil dimer and the bucky-ball--catcher complex.
+In meta-GGA functionals, $F_\text X$ becomes a two-dimensional function (depending on $s$ and $\alpha$), and judging the effective range from its behavior becomes more complicated.
+In this work, we provide an alternative analysis of the effective range of XC functionals, which can be universally applied to both GGA and meta-GGA functionals, and is not limited to exchange functionals.
 
 The fourth rung of functionals contains GGAs and meta-GGAs with partial admixture of exact exchange, which is a nonlocal functional of the occupied orbitals.
 As in HF, exact exchange does not contribute to the vdW attraction at any distance, but substantially improves accuracy of (meta-)GGAs for many chemical problems. % chktex 36
@@ -119,7 +127,7 @@ The distributions are displayed as box-and-whisker plots: a box shows the quarti
 The $x$-axis labels denote the functional and the value of the MBD range-separation parameter, $\beta^\text{MBD}$.
 The blue--red spectrum encodes the scaling, $q$, of the respective equilibrium distances of individual complexes.
 The green numbers indicate the mean absolute error (kcal/mol) for $q=1$.
-The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown for PBE, PBE0, B3LYP, SCAN* (see text), and M06-L optimize MARE around $q=1$; $\beta=1.4$ for LDA optimizes MARE for $q=2$; and for SCAN and all $q$, $\beta=1.09$ optimizes SDRE, and $\beta=1.16$ optimizes MRE\@.
+The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown for PBE, PBE0, B3LYP, SCAN* (see text), and M06-L optimize MARE for $q=0.95$--1.05; $\beta=1.4$ for LDA optimizes MARE for $q=2$; and for SCAN and all $q$, $\beta=1.09$ optimizes SDRE, and $\beta=1.16$ optimizes MRE\@.
 }\label{fig:s66-dists}
 \end{figure*}
 
@@ -267,13 +275,13 @@ The (infinite) number of atoms in graphene is set arbitrarily to 500.
 To gain further insight into the range of the functionals beyond statistical analysis, we calculated the binding energies of a series of graphene-flake dimers dimers ranging from a benzene dimer to a graphene bilayer using DFT without any long-range correction (Figure~\ref{fig:flakes}).
 We consider LDA as a reference short-range functional, accounting for any potential edge effects, and PBE+MBD as a reference full-range method.
 The functionals B3LYP, PBE, and TPSS have a similar behavior to LDA, with the binding energies being offset only by a constant.
-In contrast, the SCAN and M06 show a much stronger dependence on the system size, both at the small and large ends of the spectrum.
-The difference in the offset to LDA between benzene dimer and graphene is 60\% for M06 and 35\% for SCAN with respect to PBE+MBD\@.
+In contrast, the SCAN and M06-L show a much stronger dependence on the system size, both at the small and large ends of the spectrum.
+The difference in the offset to LDA between benzene dimer and graphene is 60\% for M06-L and 35\% for SCAN with respect to PBE+MBD\@.
 The ability to capture at least partially this system-size effect could be seen as advantageous, but it is unfortunate for developing DFT+vdW methods, because it breaks the core assumption that the functionals behave as short-range models of the electron correlation.
 After all, these functionals are semilocal by construction and the fact that they are sensitive to this strongly nonlocal environment is contradicting this semilocality.
 Furthermore, there are no known nontrivial exact constraints on the XC energy of overlapping density tails, and so the behavior of current semilocal functionals for such systems is essentially an uncontrolled result of the overall functional design, which complicates any development of ``farsighted'' density functionals.
 
-Both SCAN and M06 are meta-GGAs, but so is TPSS, which does not show this sensitivity.
+Both SCAN and M06-L are meta-GGAs, but so is TPSS, which does not show this sensitivity.
 We speculate that in the case of SCAN, this sensitivity is caused by the particular parametrization of its dependence on the dimensionless electron localization parameter, $\alpha$ (see Background).
 The values of $\alpha$ typically count in single figures within the electronic valence shells and decay slowly to zero with distance from the electronic system, while crossing $\alpha=1$ at some point~\cite{SunPRL13,BeckeJCP90}.
 Among meta-GGA functionals, SCAN has a relatively wide plateau around $\alpha=1$ (due to Eq.~\ref{eq:scan-interp})~\cite{LoosJCP17}, where the enhancement factor, $F_\mathrm x$, is equal to 1, the value for the uniform electron gas.

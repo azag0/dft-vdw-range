@@ -53,7 +53,7 @@ The performed calculations comprise:
 All DFT calculations were done with FHI-aims~\cite{BlumCPC09}, which uses atom-centered basis sets with numerical radial parts.
 We used the \verb+tight+ default basis set and grid settings, which ensure numerical convergence to 0.1\,kcal/mol in binding energies for the van der Waals (vdW) systems studied here.
 
-The VV10 nonlocal functional was evaluated with Quantum Espresso~\cite{GiannozziJPCM09} and norm-conserving Vanderbilt pseudopotentials~\cite{HamannPRB13}.
+The VV10 nonlocal functional (its rVV10 variant~\cite{SabatiniPRB13}) was evaluated with Quantum Espresso~\cite{GiannozziJPCM09} and norm-conserving Vanderbilt pseudopotentials~\cite{HamannPRB13}.
 Quantum Espresso uses plane-wave basis sets, and so is restricted to periodic boundary conditions only.
 To calculate the binding energies of isolated molecular systems, we used the plane-wave cutoff of 30\,Ry, and separated the periodic images with 8\,\AA\ of vacuum, which converges vdW binding energies to 0.1\,kcal/mol (Figure~\ref{fig:bz-tests-padding-basis}, \verb+/calc/2017-03-24-benzene-dimer-qe-tests+).
 
