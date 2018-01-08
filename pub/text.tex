@@ -280,11 +280,13 @@ The difference in the offset to LDA between benzene dimer and graphene is 60\% f
 The ability to capture at least partially this system-size effect could be seen as advantageous, but it is unfortunate for developing DFT+vdW methods, because it breaks the core assumption that the functionals behave as short-range models of the electron correlation.
 After all, these functionals are semilocal by construction and the fact that they are sensitive to this strongly nonlocal environment is contradicting this semilocality.
 Furthermore, there are no known nontrivial exact constraints on the XC energy of overlapping density tails, and so the behavior of current semilocal functionals for such systems is essentially an uncontrolled result of the overall functional design, which complicates any development of ``farsighted'' density functionals.
+The fact that a semilocal functional can capture a nonlocal information about the system in the first place (besides that contained implicitly in the electron density) can be understood by recognizing that the kinetic energy density, while being an explicit local function, is in fact an implicit nonlocal functional of the electron density.
 
 Both SCAN and M06-L are meta-GGAs, but so is TPSS, which does not show this sensitivity.
 We speculate that in the case of SCAN, this sensitivity is caused by the particular parametrization of its dependence on the dimensionless electron localization parameter, $\alpha$ (see Background).
-The values of $\alpha$ typically count in single figures within the electronic valence shells and decay slowly to zero with distance from the electronic system, while crossing $\alpha=1$ at some point~\cite{SunPRL13,BeckeJCP90}.
-Among meta-GGA functionals, SCAN has a relatively wide plateau around $\alpha=1$ (due to Eq.~\ref{eq:scan-interp})~\cite{LoosJCP17}, where the enhancement factor, $F_\mathrm x$, is equal to 1, the value for the uniform electron gas.
+The values of $\alpha$ typically count in single figures within the electronic valence shells and decay close to zero with distance from the electronic system, while crossing $\alpha=1$ at some point~\cite{SunPRL13,BeckeJCP90}.
+(This is followed either by asymptotic decay to zero in the case of valence $s$-like orbitals, or asymptotic increase to infinity in all other cases.)
+Among meta-GGA functionals, SCAN has a relatively wide plateau around $\alpha=1$ (due to Eq.~\ref{eq:scan-interp})~\cite{LoosJCP17}, where the interpolating function is equal to 1, and the functional dependence of $F_\text X$ becomes that of the fourth order expansion around the uniform electron gas.
 This results in spatial regions in the electron density tails (dominated by HOMO, the highest-occupied molecular orbital) that are described with a uniform-like functional instead of the more appropriate single-orbital form of $\alpha\approx0$.
 This can lead to sudden spikes in the exchange-correlation potential fairly outside the spatial regions where covalent bonding occurs~\cite{Gerit-private}.
 
@@ -323,6 +325,10 @@ Our toy reparameterization of the SCAN functional illustrates that the XC range 
 At the same time, it shows that a more subtle behavior of the XC range such as the system-size dependence is likely a result of the inherent functional form rather than a specific value of a numerical parameter.
 Furthermore, we did not evaluate any other properties besides vdW binding, and it is quite possible that the new parameter values would introduce regressions for other systems.
 To give a true alternative parametrization, the original fitting procedure would need to be performed with an additional constraint on vdW binding, perhaps expressed via a single simple system, which is beyond the scope of this work.
+
+The results on the graphene flakes, which do not use any vdW method, as well as those on the vdW benchmark sets, which are universal across three different vdW methods, suggest that modifying the SCAN functional would be a more straightforward approach to fixing the observed issues with the range separation.
+That being said, it is certainly possible in principle to attack the problem from the other side, and try to develop a more complex range-separation scheme in the different vdW models, which would fit the effective range of the SCAN (or another meta-GGA) functional.
+However, such a scheme would certainly require explicit consideration of the functional form of meta-GGA functionals, and perhaps incorporation of the dependence on the density parameter $\alpha$.
 
 \section{Conclusions}
 
