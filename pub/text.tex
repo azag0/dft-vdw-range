@@ -18,6 +18,14 @@ The fitting then effectively corrects for these errors, but such compensation is
 These issues could be largely solved if the effective range of the semilocal functionals was well-defined, which would restrict the form of the damping functions, limiting the chance of spurious error overcorrection.
 Understanding the effective range of current semilocal functionals is then a first step toward a more systematic range separation in the DFT+vdW methods.
 
+Traditionally, the differences between XC functionals in their contribution to the binding in vdW systems have been formulated in terms of strength rather than range.
+Whereas the strength is attested simply by the magnitude of binding energies at equilibrium geometries, the range is more subtle and decides about the rate of decay of the binding when the interacting objects are moved apart, as well as about the scaling of the binding energies with system size.
+Besides numerical results, the strength of the vdW binding by different XC functionals has been often analyzed analytically via the so-called enhancement factor, $F_\text{XC}$.
+But this approach is not well-transferable to the analysis of the effective range
+Instead, we chose to study the range by careful analysis of the binding energies across a range of intermolecular distances and system sizes.
+To this end, we employ several vdW benchmark data sets from small noncovalently bonded organic dimers, to molecular crystals, to supramolecular complexes, as well as a series of graphene-flake dimers of increasing size.
+With the use of the range-separation parameters in vdW methods, we are then able to deduce information about the effective ranges of XC functionals that would not be possible from the analysis of $F_\text{XC}$.
+
 \begin{figure}[t!]
 \includegraphics[center]{media/range-curves}
 \caption{\textbf{Range of functionals.}
@@ -88,14 +96,14 @@ SCAN uses this information directly by interpolating and extrapolating forms con
 \end{multline}
 where $\theta$ is the Heaviside step function, and $c_\mathrm{1x}=0.667$, $c_\mathrm{2x}=0.8$, and $d_\mathrm x=1.24$ are three of the total seven parameters in SCAN which are determined by fitting to properties (norms) of several model systems.
 
-Traditionally, the effective range of exchange functionals have been estimated from the behavior of $F_\text{X}[n]$ for large values of the reduced gradient, $s[n]$, which are characteristic of the density tails, where density overlap in vdW systems occurs.
-In general, this analysis predicts conclusions similar to those we find by the analysis of binding energies in this work.
+Commonly, the strength of exchange functionals for vdW-bound systems has been estimated from the behavior of $F_\text{X}[n]$ for large values of the reduced gradient, $s[n]$, which are characteristic of the density tails, where density overlap in vdW systems occurs.
+In general, this analysis leads to conclusions similar to those we find by the analysis of binding energies in this work.
 For instance (referring to Figure~\ref{fig:range}), $F_\text{X}$ grows faster with $s$ in RPBE compared to PBE, and in both cases $F_\text X$ is well above that of LDA (value of 1).
 Both these observations are in line with the effective range observed on the binding energy curves of both the uracil dimer and the bucky-ball--catcher complex.
 In meta-GGA functionals, $F_\text X$ becomes a two-dimensional function (depending on $s$ and $\alpha$), and judging the effective range from its behavior becomes more complicated.
 In this work, we provide an alternative analysis of the effective range of XC functionals, which can be universally applied to both GGA and meta-GGA functionals, and is not limited to exchange functionals.
 
-The fourth rung of functionals contains GGAs and meta-GGAs with partial admixture of exact exchange, which is a nonlocal functional of the occupied orbitals.
+The fourth rung of functionals contains GGAs and meta-GGAs with partial admixture of exact exchange, which is nonlocal functional of the occupied orbitals.
 As in HF, exact exchange does not contribute to the vdW attraction at any distance, but substantially improves accuracy of (meta-)GGAs for many chemical problems. % chktex 36
 Here, we study the hybrid GGAs PBE0~\cite{PerdewJCP96,AdamoJCP99} and B3LYP~\cite{BeckeJCP93}.
 We also analyze SCAN0~\cite{HuiJCP16}, a PBE0-like version of SCAN with 25\% of exact exchange.
@@ -131,7 +139,7 @@ The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown 
 }\label{fig:s66-dists}
 \end{figure*}
 
-\paragraph{Van der Waals benchmark sets}
+\paragraph{VdW benchmark sets from dimers to crystals}
 
 Whereas the vdW models have an explicit correlation range, the range of semilocal density functionals is only implicit, and the combined DFT+vdW models are therefore constructed by optimizing the range separation in vdW models against some benchmark properties, usually binding or lattice energies.
 Several benchmark sets of vdW-bound systems have been established, of which we use predominantly three: the S66 set of 66 smaller organic dimers~\cite{RezacJCTC11}, the X23 set of 23 molecular crystals~\cite{Otero-de-la-RozaJCP12,ReillyJCP13}, and the S12L set of 12 large supramolecular complexes~\cite{GrimmeCEJ12}.
