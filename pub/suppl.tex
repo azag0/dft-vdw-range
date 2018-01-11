@@ -21,6 +21,7 @@
 \usepackage{doi}
 
 \input{preamble.tex}
+\renewcommand{\thefigure}{S\arabic{figure}}
 \usepackage[export]{adjustbox}
 \title{\input{title.txt}\\(Supplementary information)}
 
@@ -57,13 +58,6 @@ The VV10 nonlocal functional (its rVV10 variant~\cite{SabatiniPRB13}) was evalua
 Quantum Espresso uses plane-wave basis sets, and so is restricted to periodic boundary conditions only.
 To calculate the binding energies of isolated molecular systems, we used the plane-wave cutoff of 30\,Ry, and separated the periodic images with 8\,\AA\ of vacuum, which converges vdW binding energies to 0.1\,kcal/mol (Figure~\ref{fig:bz-tests-padding-basis}, \verb+/calc/2017-03-24-benzene-dimer-qe-tests+).
 
-\begin{figure*}
-\includegraphics[center]{media/bz-tests-padding-basis}
-\caption{\textbf{Label.}
-Text.
-}\label{fig:bz-tests-padding-basis}
-\end{figure*}
-
 For crystals, $k$-point grids with density of at least 0.8\,\AA\ in reciprocal space were used for all DFT, MBD, and VV10 calculations.
 
 Both VV10 and MBD depend on the electron density, and in principle should be calculated for each density functional separately, but in practice the differences between the densities from different functionals are of the sort that changes the vdW energies only negligibly.
@@ -80,17 +74,17 @@ The ``zero hypothesis'' corresponds to a method which always gives zero 3-body i
 \end{figure*}
 
 \begin{figure*}
-\includegraphics[center]{media/mbd-rare-gas}
-\caption{\textbf{Binding curves of rare-gas dimers.}
-The reference is a highly accurate empirical potential parametrized on experimental data.
-}\label{fig:mbd-rare-gas}
-\end{figure*}
-
-\begin{figure*}
 \includegraphics[center]{media/x40-dists}
 \caption{\textbf{Distributions of relative errors in binding energies on the  X40 set of several DFT+MBD combinations.}
 }\label{fig:x40-dists}
 This is an equivalent of Figure~1 from the main text for the X40 set.
+\end{figure*}
+
+\begin{figure*}
+\includegraphics[center]{media/mbd-rare-gas}
+\caption{\textbf{Binding curves of rare-gas dimers.}
+The reference is a highly accurate empirical potential parametrized on experimental data.
+}\label{fig:mbd-rare-gas}
 \end{figure*}
 
 \begin{figure*}
@@ -106,13 +100,12 @@ This is an extension of Figure~2 from the main text to all semi-local functional
 }\label{fig:param-fitting-all}
 \end{figure*}
 
-\section{Supplementary results}
-
-Figure~\ref{fig:3-body} shows the errors of density functionals in 3-body interaction energies calculated on the 3B-69 set~\cite{RezacJCTC15}.
-Figure~\ref{fig:mbd-rare-gas} shows the interaction curves of rare-gas dimers calculated with different density functionals.
-Figure~\ref{fig:x40-dists} shows the error distributions on the X40 set.
-Figure~\ref{fig:size-dependence} shows the dependence of relative errors on system size.
-Figure~\ref{fig:param-fitting-all} is the extension of Figure~2 from the main text to all density functionals.
+\begin{figure*}
+\includegraphics[center]{media/bz-tests-padding-basis}
+\caption{\textbf{Convergence tests.}
+Convergence of the rVV10 binding energy in benzene dimer with basis set size for different pseudopotentials.
+}\label{fig:bz-tests-padding-basis}
+\end{figure*}
 
 \begingroup
 \renewcommand{\section}[2]{}
