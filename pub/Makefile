@@ -3,15 +3,9 @@ export max_print_line = 1000000
 
 default: preprint
 
-revtex: $(BLDDIR)/preprint-revtex.pdf
-
 preprint: $(BLDDIR)/preprint.pdf
 
 suppl: $(BLDDIR)/suppl.pdf
-
-minion: $(BLDDIR)/preprint-minion.pdf
-
-achemso: $(BLDDIR)/preprint-achemso.pdf
 
 diff: $(BLDDIR)/diff.pdf
 
