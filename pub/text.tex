@@ -130,7 +130,7 @@ The BJ-damped D3 method uses three parameters that control its short-range behav
 
 \begin{figure*}[t!]
 \makebox[\textwidth][c]{\includegraphics{media/s66-dists}}
-\caption{\textbf{Distributions of relative errors in binding energies on the S66 set of several DFT+MBD combinations.}
+\caption{\textbf{Distributions of relative errors in binding energies on the S66x8 set of several DFT+MBD combinations.}
 The distributions are displayed as box-and-whisker plots: a box shows the quartiles and whiskers represent the rest of the distribution, except for outliers that are more than 2.5-fold the interquartile distance from the box, which are shown individually.
 The $x$-axis labels denote the functional and the value of the MBD range-separation parameter, $\beta^\text{MBD}$.
 The blue--red spectrum encodes the scaling, $q$, of the respective equilibrium distances of individual complexes.
@@ -142,12 +142,12 @@ The values of $\beta^\text{MBD}$ were selected as follows: $\beta$-values shown 
 \paragraph{VdW benchmark sets from dimers to crystals}
 
 Whereas the vdW models have an explicit correlation range, the range of semilocal density functionals is only implicit, and the combined DFT+vdW models are therefore constructed by optimizing the range separation in vdW models against some benchmark properties, usually binding or lattice energies.
-Several benchmark sets of vdW-bound systems have been established, of which we use predominantly three: the S66 set of 66 smaller organic dimers~\cite{RezacJCTC11}, the X23 set of 23 molecular crystals~\cite{Otero-de-la-RozaJCP12,ReillyJCP13}, and the S12L set of 12 large supramolecular complexes~\cite{GrimmeCEJ12}.
-The S66 set is especially useful here, because each of the 66 dimers is given at 8 intermolecular distances distributed around the equilibrium distance, enabling at least partial separation of the short- and long-range behavior of a method.
+Several benchmark sets of vdW-bound systems have been established, of which we use predominantly three: the S66x8 set of 66 smaller organic dimers~\cite{RezacJCTC11}, the X23 set of 23 molecular crystals~\cite{Otero-de-la-RozaJCP12,ReillyJCP13}, and the S12L set of 12 large supramolecular complexes~\cite{GrimmeCEJ12}.
+The S66x8 set is especially useful here, because each of the 66 dimers is given at 8 intermolecular distances distributed around the equilibrium distance, enabling at least partial separation of the short- and long-range behavior of a method.
 Further vdW benchmark sets include the 3B-69 set of 3-body interaction energies of small molecules~\cite{RezacJCTC15} and the X40 set of binding energies of halogenated dimers~\cite{RezacJCTC12}.
 
 Here, we shortly discuss only the expected accuracy of the reference values in the benchmark sets, and refer the reader to the cited works for additional details.
-The S66 set was benchmarked with the coupled-cluster method with single, double, and perturbative triple excitations at the complete basis-set limit (CCSD(T)/CBS), a method that has been itself benchmarked to give at least an order-of-magnitude more accurate binding energies than any of the DFT+vdW methods investigated here~\cite{RezacJCTC13}. % chktex 36
+The S66x8 set was benchmarked with the coupled-cluster method with single, double, and perturbative triple excitations at the complete basis-set limit (CCSD(T)/CBS), a method that has been itself benchmarked to give at least an order-of-magnitude more accurate binding energies than any of the DFT+vdW methods investigated here~\cite{RezacJCTC13}. % chktex 36
 The X23 benchmark lattice energies were obtained from experimental sublimation enthalpies by subtracting the zero-point vibration energy, with the estimated uncertainty of 1\,kcal/mol.
 This we recently confirmed by CCSD(T) calculations of the benzene crystal (13.4\,kcal/mol compared to the benchmark value of 12.4\,kcal/mol)~\cite{YangS14}. % chktex 36
 The S12L reference binding energies were obtained by subtracting calculated solvation and zero-point energies from experimental free energies of association.
@@ -177,26 +177,26 @@ This enables us to study both the systematic error of a method (overall underbin
 \caption{\textbf{Dependence of means (MRE) and standard deviations (SDRE) of relative errors in binding energies on range-separation parameters.}
 Three long-range correlation models with their respective parameters are shown: (\textbf a) MBD with $\beta^\text{MBD}$, (\textbf b) VV10 with $b^\text{VV10}$, and (\textbf c) D3 with $a_2^\text{D3}$.
 Density functionals correspond to columns, and benchmark sets to rows within each subplot.
-Only the equilibrium-distance configurations of the S66 set are used.
+Only the equilibrium-distance configurations of the S66x8 set are used.
 SCAN* denotes two reparameterizations of the SCAN functional discussed in the text. % chktex 36
 The vertical dotted lines show where MRE equals to zero or SDRE reaches minimum.
 For DFT+D3, two choices are shown of the two other range-separation parameters in D3: $a_1^\text{D3}$ and $s_8^\text{D3}$.
 }\label{fig:param-fitting}
 \end{figure*}
 
-To study the range of the density functionals LDA, PBE, TPSS, SCAN, PBE0, B3LYP, SCAN0, and M06-L, we evaluated their combinations with the vdW methods MBD, VV10, and D3 at a range of their respective range-separation parameters, on the benchmark sets S66, X23, S12L, 3B-69, X40, and on rare-gas dimers.
-We analyze the first three (S66, X23, S12L) in detail below in Figures~\ref{fig:s66-dists} and~\ref{fig:param-fitting}, whereas the results from 3B-69 (Figure~S1), X40 (Figure~S2) and rare-gas dimers (Figure~S3) are presented in the Supplementary Information because they do not reveal any additional trends in the data.
+To study the range of the density functionals LDA, PBE, TPSS, SCAN, PBE0, B3LYP, SCAN0, and M06-L, we evaluated their combinations with the vdW methods MBD, VV10, and D3 at a range of their respective range-separation parameters, on the benchmark sets S66x8, X23, S12L, 3B-69, X40, and on rare-gas dimers.
+We analyze the first three (S66x8, X23, S12L) in detail below in Figures~\ref{fig:s66-dists} and~\ref{fig:param-fitting}, whereas the results from 3B-69 (Figure~S1), X40 (Figure~S2) and rare-gas dimers (Figure~S3) are presented in the Supplementary Information because they do not reveal any additional trends in the data.
 The full data, obtained with FHI-aims~\cite{BlumCPC09} and Quantum Espresso~\cite{GiannozziJPCM09,HamannPRB13}, as well as computational details and other resources, are published via a Git repository~\cite{GitRepo} and summarized in Supplementary Information.
 
-The case of the S66 set and different DFT+MBD combinations (Figure~\ref{fig:s66-dists}) shows that summarizing the error distributions into a single number such as the mean absolute error reduces the method comparison to a one-dimensional classification, whereas comparing the full distributions in fact reveals distinct patterns specific to individual functionals.
-Of the tested functionals, LDA is the only one that systematically overbinds S66 at equilibrium even without any long-range correction.
+The case of the S66x8 set and different DFT+MBD combinations (Figure~\ref{fig:s66-dists}) shows that summarizing the error distributions into a single number such as the mean absolute error reduces the method comparison to a one-dimensional classification, whereas comparing the full distributions in fact reveals distinct patterns specific to individual functionals.
+Of the tested functionals, LDA is the only one that systematically overbinds S66x8 at equilibrium even without any long-range correction.
 At the same time, when the equilibrium distances are scaled by 2, LDA predicts essentially no binding.
 In this regard, although LDA binds vdW systems in equilibrium (too) strongly, it is very short-ranged.
 The tail behavior can be fixed accurately by MBD with $\beta^\text{MBD}=1.4$, but the short-range overbinding cannot be compensated by a vdW energy term.
 The increased overestimation of the XC energy with decreased distance then leads to the well-known underestimation of binding distances by LDA\@.
 Already LDA thus illustrates that the degree to which a (semi-)local functional binds vdW systems is in general not a good measure for how well-suited it is for a generally applicable DFT+vdW method. % chktex 36
 
-In contrast, both PBE and PBE0 are strongly underbinding S66 at all intermolecular separations, but with MBD and appropriate range separation ($\beta^\text{MBD}\approx0.83$), the resulting PBE+MBD and PBE0+MBD methods are well balanced, with symmetric error distributions, MAE independent of distance, and SDRE monotonously increasing at shorter distances.
+In contrast, both PBE and PBE0 are strongly underbinding S66x8 at all intermolecular separations, but with MBD and appropriate range separation ($\beta^\text{MBD}\approx0.83$), the resulting PBE+MBD and PBE0+MBD methods are well balanced, with symmetric error distributions, MAE independent of distance, and SDRE monotonously increasing at shorter distances.
 The admixture of exact exchange decreases SDRE from 10.2\% with PBE to 8.7\% with PBE0 at equilibrium, but in general has only a small effect.
 Another hybrid GGA, B3LYP, behaves as a true opposite of LDA, being at the same time very repulsive, yet quite long-ranged.
 Even with a fairly short-range correlation covered by MBD ($\beta^\text{MBD}\approx0.7$), B3LYP+MBD still underbinds at equilibrium, and perhaps more surprisingly at longer distances.
@@ -208,9 +208,9 @@ When SDRE is optimized, SCAN+MBD has consistently narrower error distributions c
 When MRE is optimized, the profile of SCAN+MBD is similar to that of PBE+MBD, with smaller outliers.
 Adding exact exchange in SCAN0 (not shown) has even smaller effect than in PBE0, making the SCAN and SCAN0 error distributions almost indistinguishable.
 
-Finally, M06-L requires only slightly larger amount of long-range correlation than SCAN, and most of the complexes from the S66 set are described well around equilibrium.
+Finally, M06-L requires only slightly larger amount of long-range correlation than SCAN, and most of the complexes from the S66x8 set are described well around equilibrium.
 But several outliers are strongly overbound, and all complexes are overbound at longer distances, which is in line with previous studies~\cite{GoerigkJPCL15}.
-Both issues may stem from the fact that the heavily fitted M06-L is parametrized also on the S22 set, a smaller version of S66, but S66 contains additional complexes and out-of-equilibrium complexes for which M06-L was not ``trained''.
+Both issues may stem from the fact that the heavily fitted M06-L is parametrized also on the S22 set, a smaller version of S66x8, but S66x8 contains additional complexes and out-of-equilibrium complexes for which M06-L was not ``trained''.
 
 \begin{table*}[t]
 \centering
@@ -252,12 +252,12 @@ XC & \multicolumn3c{MARE$^\text{a}$} & \multicolumn3c{MRE$^\text{b}$} & $^\text{
 \small
 $^\text{a}$Mean absolute relative error.
 $^\text{b}$Mean relative error.
-$^\text{c}$Range-separation parameter minimizing MARE on S66\@.
+$^\text{c}$Range-separation parameter minimizing MARE on S66x8\@.
 \end{table*}
 
 Of the tested functionals, PBE and SCAN (or their hybrid versions) show a potential to work as general balanced DFT+vdW methods.
 To rule out the possibility that this conclusion about the two functionals is specific to MBD, we studied how MRE and SDRE of their combinations with MBD, VV10, and D3 depend on the respective range-separation parameters (Figure~\ref{fig:param-fitting}).
-Comparing the results for the S66 set shows that all three vdW models have similar behavior, including the increased ambiguity in optimizing either for SDRE or MRE on the X23 set in the case of SCAN\@.
+Comparing the results for the S66x8 set shows that all three vdW models have similar behavior, including the increased ambiguity in optimizing either for SDRE or MRE on the X23 set in the case of SCAN\@.
 It is the case even for D3, which is potentially more flexible when adapting to a functional thanks to its three parameters.
 Furthermore, Figure~\ref{fig:param-fitting} shows that whereas the optimal range separation of the vdW models is shared across different system types for the PBE functional, this is not the case for SCAN, for which the XC range seems to grow with the system size (see Figure~S4 for system-size dependence of the binding-energy errors within each dataset).
 All these observations are true for all three vdW models.
@@ -311,20 +311,20 @@ The shape of the function is controlled with three parameters, $c_\mathrm{1x}=0.
 
 In the series of graphene-flake dimers, the electronic gap (calculated with SCAN) decreases from 4.7\,eV for benzene dimer to 0.9\,eV for graphene bilayer, which makes the density tail decay slower with increasing system size.
 Because the $\alpha=1$ behavior of SCAN makes it quite sensitive in the density tails, whose overlap also encodes the vdW bonding on the electron-density level, it only makes sense that SCAN is able to extract the nonlocal information about the system size via the decreasing electronic gap.
-This mechanism could be also partially responsible for the discrepancies in optimal range separation for SCAN observed on the S66, X23, and S12L sets (Figure~\ref{fig:param-fitting}).
+This mechanism could be also partially responsible for the discrepancies in optimal range separation for SCAN observed on the S66x8, X23, and S12L sets (Figure~\ref{fig:param-fitting}).
 
 To check this hypothesis, we constructed several reparameterizations of SCAN and tested them on these benchmark sets.
 We focused on the three parameters in Eq.~\ref{eq:scan-interp} because their values are determined weakly, having been fitted only to system-specific rather than universal norms.
 We found that the overall XC range of SCAN can be changed substantially by modifying either of these parameters, without any regression in the overall performance of the SCAN+vdW methods.
 However, the systems-size dependence of the optimal range separation for SCAN is not affected by either of them.
-For illustration, Figures~\ref{fig:s66-dists},~\ref{fig:param-fitting}, and~\ref{fig:flakes} show results for a SCAN reparametrization with $d_\mathrm x$ changed from 1.24 to 1.6, which minimizes the overall error on S66 and reduces the XC range of SCAN (optimal $\beta^\text{MBD}$ of 0.97).
+For illustration, Figures~\ref{fig:s66-dists},~\ref{fig:param-fitting}, and~\ref{fig:flakes} show results for a SCAN reparametrization with $d_\mathrm x$ changed from 1.24 to 1.6, which minimizes the overall error on S66x8 and reduces the XC range of SCAN (optimal $\beta^\text{MBD}$ of 0.97).
 Figure~\ref{fig:flakes} clearly shows that the reparameterization does not change the sensitivity of SCAN in the density tails, as it only shifts the binding energy in graphene flakes by a constant.
 
 \section{Discussion}
 
 SCAN has been previously combined with VV10 by \citet{PengPRX16} and with D3 and VV10 by \citet{BrandenburgPRB16}.
 The obtained optimal values of $b^\text{VV10}$ were 15.7 and 14.0, respectively, and optimal parametrization of D3 was found to be $s_8^\text{D3}=0$, $a_1^\text{D3}=0.54$ and $a_2^\text{D3}=5.4$.
-From the results in Figure~\ref{fig:param-fitting}, this corresponds to an optimal MRE on S66 for SCAN+VV10 (but systematic overbinding on X23 and S12L), and to optimal statistical error (SDRE) for SCAN+D3, leading again to some degree of systematic overbinding.
+From the results in Figure~\ref{fig:param-fitting}, this corresponds to an optimal MRE on S66x8 for SCAN+VV10 (but systematic overbinding on X23 and S12L), and to optimal statistical error (SDRE) for SCAN+D3, leading again to some degree of systematic overbinding.
 \citet{BrandenburgPRB16} associated this tendency mainly with hydrogen-bonded systems, which is in line with the observed overbinding of various ice structures by SCAN (without any vdW correction)~\cite{ChenPRB16}.
 
 \citet{PengPRX16} argued that shifting the range separation between a semilocal functional and a vdW model towards the latter is beneficial.
