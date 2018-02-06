@@ -78,6 +78,7 @@ Several special-purpose functionals designed to combine well with long-range cor
 (An ``ideal'' exchange functional in this regard would be different from the exact exchange, because it would still contain a part of the short-range post-HF correlation that is not covered by GGA correlation functionals.)
 Some of these functionals perform well for vdW-bound systems (when combined with a vdW model), but not much is known about their accuracy for other systems, preventing them from becoming general methods.
 Similar approach was used in the construction of several XC functionals~\cite{MardirossianPCCP14,MardirossianJCP15a,MardirossianJCP16}, spanning the whole Jacob's ladder, based on the B97 functional~\cite{BeckeJCP97}, in which the fixed vdW counterpart was VV10 instead of vdW-DF\@.
+These functionals were designed for and tested extensively~\cite{GoerigkPCCP17} on small and mid-sized molecules, but have not yet been adopted for solids and organic/inorganic interfaces.
 
 In meta-GGAs, the third rung of the Jacob's ladder, still higher derivatives of the electron density (or occupied orbitals, $\phi_i$) beyond the gradient are used to construct the enhancement factor, $F_\mathrm x$.
 This includes the Laplacian of the density and the KS kinetic energy density, $\tau[n]=\sum_i^\text{occ}\lvert\boldsymbol\nabla\phi_i\rvert^2/2$.
