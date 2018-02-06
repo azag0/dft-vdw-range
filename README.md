@@ -1,4 +1,4 @@
-This git repo contains all resources for the manuscript *The range of semi-local density functionals in van der Waals systems*.
+This git repo contains all resources for the manuscript *Electronic exchange and correlation in van der Waals systems: Balancing semilocal and nonlocal energy contributions*.
 
 ## Requirements
 
