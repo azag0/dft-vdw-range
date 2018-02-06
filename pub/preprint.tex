@@ -9,11 +9,6 @@
 \usepackage{authblk}
 \renewcommand\Affilfont{\itshape\small} % chktex 6
 
-\usepackage[runin]{abstract}
-\setlength{\absleftindent}{0.7in}
-\setlength{\absrightindent}{\absleftindent}
-\setlength{\abstitleskip}{-1em}
-
 \usepackage[normal]{caption}
 \DeclareCaptionLabelSeparator{pipe}{ $|$ }
 \captionsetup{labelsep=pipe}
@@ -41,14 +36,17 @@
 
 \nocite{achemso-control}
 
-\twocolumn[
+\twocolumn[{
   \maketitle
   \vspace{-3em}
-  \begin{onecolabstract}
-  \input{abstract.tex}
-  \end{onecolabstract}
+  \begin{center}
+  \begin{minipage}{0.85\linewidth}
+    \small
+    \paragraph{Abstract}\input{abstract.tex}
+  \end{minipage}
+  \end{center}
   \vspace{1em}
-]
+}]
 
 \begingroup
 \renewcommand\thefootnote{}\footnote{$^*$Email: alexandre.tkatchenko@uni.lu}%
