@@ -1,4 +1,6 @@
-This git repo contains all resources for the manuscript *Electronic exchange and correlation in van der Waals systems: Balancing semilocal and nonlocal energy contributions*.
+This repository contains all resources for the manuscript *Electronic exchange and correlation in van der Waals systems: Balancing semilocal and nonlocal energy contributions*.
+
+This is the unedited Author’s version of a Submitted Work that was subsequently accepted for publication in Journal of Chemical Theory and Computation, copyright © American Chemical Society after peer review. To access the final editedand published work see DOI [acs.jctc.7b01172](https://doi.org/10.1021/acs.jctc.7b01172).
 
 ## Requirements
 
